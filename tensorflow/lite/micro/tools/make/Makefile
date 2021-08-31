@@ -137,7 +137,8 @@ CC_WARNINGS := \
   -Wall \
   -Wextra \
   -Wstrict-aliasing \
-  -Wno-unused-parameter
+  -Wno-unused-parameter \
+  -Wno-strict-overflow
 
 COMMON_FLAGS := \
   -Werror \
