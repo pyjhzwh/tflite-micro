@@ -229,12 +229,51 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
   // Figure out when the first and last use of each tensor is.
   for (int i = (operators_size - 1); i >= 0; --i) {
     const auto* op = subgraph->operators()->Get(i);
+#ifdef TOPOLOGY_MEM_PLANNER 
+    switch(EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index))) {
+      case BuiltinOperator_CONV_2D: {
+        op->params = reinterpret_cast<ConvOpParams>( );
+        ConvOpParams* current_op_params= op->params;
+        op->opcode = EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index));
+        // input and filter
+        TFLITE_DCHECK_EQ(op->inputs()->size(), 2);
+        // 1 output
+        TFLITE_DCHECK_EQ(op->outputs()->size(), 1);
+        break;
+      }
+      default:
+        break;
+    }
+#endif
     for (size_t n = 0; n < op->inputs()->size(); ++n) {
       const int tensor_index = op->inputs()->Get(n);
       AllocationInfo* current = &info_[tensor_index];
       if (((current->last_used == -1) || (current->last_used < i))) {
         current->last_used = i;
       }
+#ifdef TOPOLOGY_MEM_PLANNER 
+    switch(EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index))) {
+      case BuiltinOperator_CONV_2D: {
+        // input
+        if (current->needs_allocating) {
+            TfLiteEvalTensor* input_tensor = &(eval_tensors[tensor_index]);
+            TFLITE_DCHECK_EQ(input_tensor->dims->size, 4);
+            current_op_params->input_height = input_tensor->dims->data[1];
+            current_op_params->input_height = input_tensor->dims->data[2];
+        }
+        // filter
+        else {
+            TfLiteEvalTensor* input_tensor = &(eval_tensors[tensor_index]);
+            TFLITE_DCHECK_EQ(input_tensor->dims->size, 4);
+            current_op_params->input_height = input_tensor->dims->data[1];
+            current_op_params->input_height = input_tensor->dims->data[2];
+        }
+        break;
+      }
+      default:
+        break;
+    }
+#endif
     }
     for (size_t n = 0; n < op->outputs()->size(); ++n) {
       const int tensor_index = op->outputs()->Get(n);
@@ -242,6 +281,20 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
       if ((current->first_created == -1) || (current->first_created > i)) {
         current->first_created = i;
       }
+#ifdef TOPOLOGY_MEM_PLANNER 
+    switch(EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index))) {
+      case BuiltinOperator_CONV_2D: {
+        TfLiteEvalTensor* output_tensor = &(eval_tensors[tensor_index]);
+        TFLITE_DCHECK_EQ(output_tensor->dims->size, 4);
+        current_op_params->output_height = output_tensor->dims->data[1];
+        current_op_params->output_height = output_tensor->dims->data[2];
+        
+        break;
+      }
+      default:
+        break;
+    }
+#endif
     }
   }
   return kTfLiteOk;
@@ -303,7 +356,12 @@ TfLiteStatus AllocationInfoBuilder::AddScratchBuffers(
 TfLiteStatus CreatePlan(ErrorReporter* error_reporter,
                         GreedyMemoryPlanner* planner,
                         const AllocationInfo* allocation_info,
-                        size_t allocation_info_size) {
+                        size_t allocation_info_size
+#ifdef TOPOLOGY_MEM_PLANNER                        
+                        ,const OperatorInfo* operator_info,
+                        size_t operator_info_size
+#endif
+                        ) {
   // Add the tensors to our allocation plan.
   for (size_t i = 0; i < allocation_info_size; ++i) {
     const AllocationInfo* current = &allocation_info[i];
@@ -321,6 +379,18 @@ TfLiteStatus CreatePlan(ErrorReporter* error_reporter,
       }
     }
   }
+#ifdef TOPOLOGY_MEM_PLANNER 
+  // Add the operators to our allocation plan.
+  for (size_t i= 0; i < operator_info_size; ++i ) {
+    const OperatorInfo* current = &operator_info[i];
+    // TODO: Do we need to check if the operator is the targets?
+    // Like Conv, Add, DepthConv, etc.?
+    if (1) {
+      TF_LITE_ENSURE_STATUS(
+          planner->AddOperatorInput(error_reporter)
+    }
+  }
+#endif
   return kTfLiteOk;
 }
 
@@ -952,6 +1022,23 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
         bytes);
     return kTfLiteError;
   }
+
+#ifdef TOPOLOGY_MEM_PLANNER
+  size_t operator_info_count = subgraph->operators()->size() ;
+  size_t operators_bytes = sizeof(OperatorInfo) * operator_info_count;
+
+  // Allocate an array of OperatorInfo structs from the temp section. This
+  // struct will be used by OperatorInfoBuilder to find buffer usage.
+  OperatorInfo* operator_info = reinterpret_cast<OperatorInfo*>(
+      memory_allocator_->AllocateTemp(bytes, alignof(OperatorInfo)));
+  if (operator_info == nullptr) {
+    TF_LITE_REPORT_ERROR(
+        error_reporter_,
+        "Failed to allocate memory for operator_info, %d bytes required",
+        operators_bytes);
+    return kTfLiteError;
+  }
+#endif
 
   // Use the AllocationInfoBuilder class to help determine where buffers are
   // used in the subgraph.
