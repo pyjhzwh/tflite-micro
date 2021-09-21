@@ -300,14 +300,16 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
             TfLiteEvalTensor* input_tensor = &(eval_tensors[tensor_index]);
             TFLITE_DCHECK_EQ(input_tensor->dims->size, 4);
             current_op_params->input_height = input_tensor->dims->data[1];
-            current_op_params->input_height = input_tensor->dims->data[2];
+            current_op_params->input_width = input_tensor->dims->data[2];
+            current_op_params->input_channel = input_tensor->dims->data[3];
         }
         // filter
         else {
             TfLiteEvalTensor* filter_tensor = &(eval_tensors[tensor_index]);
             TFLITE_DCHECK_EQ(filter_tensor->dims->size, 4);
             current_op_params->filter_height = filter_tensor->dims->data[1];
-            current_op_params->filter_height = filter_tensor->dims->data[2];
+            current_op_params->filter_width = filter_tensor->dims->data[2];
+            current_op_params->output_channel = filter_tensor->dims->data[3];
         }
         break;
       }
@@ -329,7 +331,7 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
         TfLiteEvalTensor* output_tensor = &(eval_tensors[tensor_index]);
         TFLITE_DCHECK_EQ(output_tensor->dims->size, 4);
         current_op_params->output_height = output_tensor->dims->data[1];
-        current_op_params->output_height = output_tensor->dims->data[2];
+        current_op_params->output_width = output_tensor->dims->data[2];
         
         break;
       }
