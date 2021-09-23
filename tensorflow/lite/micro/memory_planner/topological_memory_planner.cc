@@ -58,58 +58,59 @@ void SortInPlace(int* values, int* ids, int size) {
   } while (any_swapped);
 }
 
-int calculatePaddingLen(OperatorRequirements* op_requirement, void* node_params, void* op_data) {
-
-  BuiltinOperator op_type = op_requirement->op_type;
-  // if node is conv2d
-  if (op_type == BuiltinOperator_CONV_2D) {
-    
-  }
-  // if node is in-place operation
-  else if (op_type == BuiltinOperator_ADD)
-  {
-    return 0;
-  }
-  
-
+// First level: ascending order of values1
+// Second level: for the same values1, descending order of values2
+bool needSwap2Level(int* val1, int* val2, int idx1, int idx2){
+  return (val1[idx1] != val1[idx2]) ? val1[idx1] > val1[idx2] : val1[idx1] < val1[idx2];
 }
 
-int conv2DMemAllocation(Conv2DOpParams* op_params) {
-  // create depedency
-  for (int out_hi = op_params->output_height; out_hi >= 0; --out_hi) {
-    for (int out_wi = op_params->output_width; out_wi >= 0; --out_wi) {
-      // find the corresponding input window
-      // add dependencies
-      int in_hi = out_hi * op_params->stride_height - op_params->padding
-      int in_wi = out_wi * op_params->stride_width - op_params->padding
-      // only keep the last dependent out tensor 
-      for (int i = 0; i < op_params->filter_height; ++i) {
-        for (int j = 0; j < op_params->filter_width; ++j) {
-          int x = in_hi + i
-          int y = in_wi + j
-          // if not assigned child
-          if (x >= 0 && y >= 0 && x < h && y < w && last_child_of_tensor[x][y]==-1) {
-            // TODO: use struct not tuple in python
-            last_child_of_tensor[x][y] = 
-                (out_hi * op_params->output_width + out_wi) * op_params->output_channel;
-          }
-          // otherwise, continue because we only care last child
-        }
+// Simple stable in-place sort function. Not time-efficient for large arrays.
+// Would normally be in an anonymous namespace to keep it private, but we want
+// to be able to test it externally.
+// First level: ascending order of values1
+// Second level: for the same values1, descending order of values2
+// Third priority: for the same values1 and values2, order by values3
+void SortInPlace2Level(int* val1s, int* val2s, int* ids, int size) {
+  bool any_swapped;
+  do {
+    any_swapped = false;
+    for (int i = 1; i < size; ++i) {
+      if (needSwap2Level(val1s, val2s, i, i-1)) 
+        const int val1_temp = val1s[i - 1];
+        val1s[i - 1] = val1s[i];
+        val1s[i] = val1_temp;
+        const int val2_temp = val2s[i - 1];
+        val2s[i - 1] = val2s[i];
+        val2s[i] = val2_temp;
+        const int id_temp = ids[i - 1];
+        ids[i - 1] = ids[i];
+        ids[i] = id_temp;
+        any_swapped = true;
       }
     }
-  }
+  } while (any_swapped);
+}
+
+
+// if we need forward physically padding input tensor, how many bytes needed
+int CalForwardConv2DMemPaddingLen(Conv2DOpParams* op_params) {
   // calculate actual memory size
-  curend = 0
+  int curend = 0
   for (int in_hi = 0; in_hi < op_params->input_height; ++in_hi) {
     for (int in_wi = 0; in_wi < op_params->input_width; ++in_wi) {
-        // TODO: use struct not tuple in python
-        outmem_pos_lastchild = last_child_of_tensor[in_hi][in_wi]
-        curend = max(curend, outmem_pos_lastchild)
+        // calculate the last child of in_hi, in_wi
+        int child_hi = std::max(0, std::min(op_params->output_height-1, 
+            (int)(std::floor((float)(in_hi+op_params->padding)/(float)(op_params->filter_height))) ));
+        int child_wi = std::max(0, std::min(op_params->output_width-1, 
+            (int)(std::floor((float)(in_wi+op_params->padding)/(float)(op_params->filter_width))) ));
+        // need to +1, because output should not overwrite its dependent inputs
+        int outmem_pos_lastchild = (child_hi * op_params->output_width + child_wi + 1) * op_params->out_channel;
+        curend = std::max(curend, outmem_pos_lastchild);
         curend += op_params->input_channel;
     }
   }
 
-  return curend - self.input_height * self.input_width * self.input_channel;
+  return curend - op_params->input_height * op_params->input_width * op_params->input_channel;
 }
 
 TopologicalMemoryPlanner::TopologicalMemoryPlanner(unsigned char* scratch_buffer,
@@ -132,21 +133,22 @@ TopologicalMemoryPlanner::TopologicalMemoryPlanner(unsigned char* scratch_buffer
     next_free += sizeof(bool) * operator_size;
   }
 
-  //buffer_created_sorted_ = reinterpret_cast<int*>(next_free);
-  //next_free += sizeof(int) * max_buffer_count_;
+  buffer_created_sorted_ = reinterpret_cast<int*>(next_free);
+  next_free += sizeof(int) * max_buffer_count_;
 
-  //buffer_ids_sorted_ = reinterpret_cast<int*>(next_free);
-  //next_free += sizeof(int) * max_buffer_count_;
+  buffer_last_used_sorted_ = reinterpret_cast<int*>(next_free);
+  next_free += sizeof(int) * max_buffer_count_;
 
-  /*
+  buffer_ids_sorted_ = reinterpret_cast<int*>(next_free);
+  next_free += sizeof(int) * max_buffer_count_;
+
+  
   buffers_sorted_by_offset_ = reinterpret_cast<ListEntry*>(next_free);
   next_free += sizeof(ListEntry) * max_buffer_count_;
-  */
+  
   // Allocate space for struct of Operator
   operator_info_ = reinterpret_cast<OperatorInfo*>(next_free);
   next_free += sizeof(OperatorInfo) * operator_size_;
-  // Allocate space to store int* of inputs and outputs of operatos
-  next_free += sizeof(int) * max_buffer_count_ * 2 * operator_size_;
 
   buffer_offsets_ = reinterpret_cast<int*>(next_free);
 }
@@ -154,6 +156,7 @@ TopologicalMemoryPlanner::TopologicalMemoryPlanner(unsigned char* scratch_buffer
 TopologicalMemoryPlanner::~TopologicalMemoryPlanner() {
   // We don't own the scratch buffer, so don't deallocate anything.
 }
+
 
 TfLiteStatus TopologicalMemoryPlanner::AddOperatorInfo(
   tflite::ErrorReporter* error_reporter, int operator_id, BuiltinOperator op_type, 
@@ -276,102 +279,121 @@ TopologicalMemoryPlanner::NextSimultaneouslyActiveBuffer(
   return result;
 }
 
+int TopologicalMemoryPlanner::CalculatePaddingLen(OperatorRequirements* op_requirement, 
+                                                  int in_tensor_id, int out_tensor_id) {
+
+  BuiltinOperator op_type = op_requirement_->op_type;
+  // if node is conv2d
+  if (op_type == BuiltinOperator_CONV_2D) {
+    // if not residual layer
+    if (requirements_[in_tensor_id].last_time_used == requirements_[out_tensor_id].first_time_used) {
+      return calConv2DMemPaddingLen(op_params->Conv2DOpParams) + \
+        requirements_[in_tensor_id].size - requirements_[out_tensor_id].size;
+    }
+  }
+  // if node is in-place operation
+  else if (op_type == BuiltinOperator_ADD)
+  {
+    return 0;
+  }
+  
+
+}
+
+int TopologicalMemoryPlanner::CalCurrentOffset(
+    ListEntry* prior_entry, BufferRequirements* prior_requirements, 
+    BufferRequirements* current_requirements) {
+
+  bool* output_of_operators = current_requirements->output_of_operators;
+
+  for (int i = 0; i < operators_size_; ++i) {
+    if (output_of_operators[i]) {
+      if ( IsOverlapOrInplaceOperator(ops_requirements_[i].op_type) ) {
+        // if prior buffer is the input of the operator i of which
+        // current buffer is the output 
+        // the second == is to ensure it is the prior buffer will not be
+        // used later, so we can safely overwrite it
+        if ( prior_requirements->input_of_operators[i] && 
+            prior_requirements->last_time_used == current_requirements->first_time_used) {
+              int padding = CalculatePaddingLen(&ops_requirements_[i], prior_requirements_index, 
+                                  current_requirements_index);
+              // mark operator as reversed computation
+              if(padding > 0) {
+                ops_requirements_[i].reverse=true;
+              }
+              return prior_entry->offset + padding;
+        }
+      }
+    }
+  }    
+  return prior_entry->offset + prior_requirements->size;
+}
+
+
 void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
   if (!need_to_calculate_offsets_ || (buffer_count_ == 0)) {
     return;
   }
   need_to_calculate_offsets_ = false;
 
-  // Start off by ordering the buffers in descending order of size.
-  // This helps find a more compact layout. Intuitively, you can think
-  // about putting the large buffers in place first, and then the
-  // smaller buffers can fit in the gaps, rather than fragmenting the
-  // gaps with small buffers at the beginning. Add offline planned offsets
-  // first in the list, since they have a predetermined offset.
+  // Start off by ordering the buffers in ascending order of created time.
+  // The second level of order is descending order of last used time
   int idx_from_tail = buffer_count_;
   int idx_from_head = 0;
   for (int i = 0; i < buffer_count_; ++i) {
     if (requirements_[i].offline_offset == kOnlinePlannedBuffer) {
       idx_from_tail--;
       buffer_created_sorted_[idx_from_tail] = requirements_[i].first_time_used;
+      buffer_last_used_sorted_[idx_from_tail] = requirements_[i].last_time_used;
       buffer_ids_sorted_[idx_from_tail] = i;
       buffer_offsets_[i] = -1;
     } else {
       buffer_created_sorted_[idx_from_head] = requirements_[i].last_time_used;
+      buffer_last_used_sorted_[idx_from_head] = requirements_[i].last_time_used;
       buffer_ids_sorted_[idx_from_head] = i;
       buffer_offsets_[i] = requirements_[i].offline_offset;
       idx_from_head++;
     }
   }
 
-  // Do we need this? AddTensor have already gurateened that buffers
-  // are added according to the operator's order
-  // This sorting algorithm is naive, and may end up taking a very long time
+  // Sort buffers in ascending order of created_time, and then descending order
+  // of last_used time
   // with hundreds of buffers. Do not sort the offline planned offsets.
-  //SortInPlace(&buffer_sizes_sorted_[idx_from_head],
-  //                   &buffer_ids_sorted_[idx_from_head],
-  //                   buffer_count_ - idx_from_head);
+  SortInPlace2Level(&buffer_created_sorted_[idx_from_head],
+                    &buffer_last_used_sorted_[idx_from_head]
+                     &buffer_ids_sorted_[idx_from_head],
+                     buffer_count_ - idx_from_head);
 
-  // if buffer_count_ ==0, return at first line; So don't worry error
-  // to access requirements_[0]
-  int base_first_time_used = requirements_[0]->first_time_used;
-  int i = 0;
-  while (i < buffer_count_) {
-    int base_first_time_used = requirements_[i]->first_time_used;
-    while(current_first_time_used == base_first_time_used && i < buffer_count_) {
-      i++;
-      continue;
-    }
-    base_first_time_used = current_first_time_used;
-  }
-
-  // Initialize the first entry to the first buffer in
-  // buffer_ids_sorted_.
-  //   - If there are no offline planned offsets, the largest buffer will be
-  //     first, and the buffers will be handled in size order.
-  //   - If offline offsets are present, these will be handled first in order
-  //     for the greedy algorithm to utilized gaps in the offline plan.
+  // place buffers with asending time (oeprator)
   first_entry_index_ = 0;
-  next_free_entry_ = 1;
-  ListEntry* first_entry = &buffers_sorted_by_offset_[first_entry_index_];
-  first_entry->next_entry_index = -1;  // to mark the entry as end of list
-  int buffer_id = buffer_ids_sorted_[0];
-  first_entry->requirements_index = buffer_id;
-  if (requirements_[buffer_id].offline_offset == kOnlinePlannedBuffer) {
-    buffer_offsets_[buffer_id] = 0;
-  }
-  first_entry->offset = buffer_offsets_[buffer_id];
-
-  // Work through the rest of the buffers to find a good gap to place each one.
-  for (int i = 1; i < buffer_count_; ++i) {
-    // The id is the order the buffer was originally added by the client.
-    buffer_id = buffer_ids_sorted_[i];
-    // Look at what size and time range the buffer needs to be active.
+  next_free_entry_ = 0;
+  int current_start_time = buffer_created_sorted_[first_entry_index_];
+  int idx = 0;
+  for (int idx = 0; i < buffer_count_; ++i) {
+    int buffer_id = buffer_ids_sorted_[idx];
     BufferRequirements* wanted_requirements = &requirements_[buffer_id];
     const int wanted_size = wanted_requirements->size;
     const int wanted_first_time_used = wanted_requirements->first_time_used;
     const int wanted_last_time_used = wanted_requirements->last_time_used;
 
-    // Find the first buffer that's active in our time range. All placed
-    // buffers are stored in the order of their starting position in the arena
-    // so that it's easy to find the next buffer in memory, and so the gap.
-    // The candidate_entry variable holds the buffer that we're considering
-    // placing the current buffer after.
-
     int candidate_offset = 0;
-    // Loop through the offset-ordered list of buffers, looking for gaps.
+    // Loop through the offset-ordered list of buffer chunks
     if (wanted_requirements->offline_offset == kOnlinePlannedBuffer) {
       ListEntry* prior_entry = nullptr;
-      while (true) {
-        // Find out what the next active buffer is.
+      while(true) {
+        // find the gap to place the current buffer_id;
         ListEntry* next_entry = NextSimultaneouslyActiveBuffer(
-            prior_entry, wanted_first_time_used, wanted_last_time_used);
-
+            prior_entry, wanted_first_time_used);
+        
+        //If we did not find a good gap in the previous steps
         if (prior_entry) {
           BufferRequirements* candidate_requirements =
-              &requirements_[prior_entry->requirements_index];
-          const int prior_entry_offset =
-              prior_entry->offset + candidate_requirements->size;
+            &requirements_[prior_entry->requirements_index];
+          // if the current buffer could have overlap or in-place
+          // with the prior_entry, calculate the prior_entry_offset
+          // considering overlaps
+          const int prior_entry_offset = CalCurrentOffset(prior_entry,
+            candidate_requirements, wanted_requirements);
           if (prior_entry_offset > candidate_offset) {
             candidate_offset = prior_entry_offset;
           }
@@ -391,7 +413,8 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
         // The gap wasn't big enough, so move on to another candidate.
         prior_entry = next_entry;
       }
-    } else {
+    }
+    else {
       // Offline planned offset are to be considered constant
       candidate_offset = wanted_requirements->offline_offset;
     }
@@ -407,7 +430,7 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
     new_entry->requirements_index = buffer_id;
     const int new_entry_index = next_free_entry_;
     ++next_free_entry_;
-
+    //schedule_this_buffer();
     if (first_entry->offset > candidate_offset) {
       // The new entry offset is smaller than the first entry offset =>
       // replace the first entry

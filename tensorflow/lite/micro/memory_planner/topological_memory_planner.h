@@ -16,6 +16,7 @@ limitations under the License.
 #ifndef TENSORFLOW_LITE_MICRO_MEMORY_PLANNER_TOPOLOGICAL_MEMORY_PLANNER_H_
 #define TENSORFLOW_LITE_MICRO_MEMORY_PLANNER_TOPOLOGICAL_MEMORY_PLANNER_H_
 
+#include <cmath>
 #include "tensorflow/lite/micro/compatibility.h"
 #include "tensorflow/lite/micro/memory_planner/memory_planner.h"
 #include "tensorflow/lite/schema/schema_generated.h"
@@ -154,6 +155,7 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   //     online planned buffers sorted by size
   //   }
   int* buffer_created_sorted_;
+  int* buffer_last_used_sorted_;
   int* buffer_ids_sorted_;
   ListEntry* buffers_sorted_by_offset_;
   int next_free_entry_;    // Index of the next free entry of
