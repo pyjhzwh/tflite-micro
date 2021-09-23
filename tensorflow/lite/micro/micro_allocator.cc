@@ -254,6 +254,8 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
   for (int i = (operators_size - 1); i >= 0; --i) {
     const auto* op = subgraph->operators()->Get(i);
 #ifdef TOPOLOGY_MEM_PLANNER 
+    TfLiteNode* node = &(
+          graph_.GetAllocations()[subgraph_idx].node_and_registrations[i].node);
     OperatorInfo* current_op_info = &(operator_info_[i]);
     switch(EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index))) {
       case BuiltinOperator_CONV_2D: {
@@ -267,7 +269,7 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
         // reference: flatbuffer_conversion.cc line1092
         const Conv2DOptions* schema_params = op->builtin_options_as_Conv2DOptions();
         if (schema_params != nullptr) {
-          current_op_info->padding = ConvertPadding(schema_params->padding());
+          current_op_info->padding_type = ConvertPadding(schema_params->padding());
           current_op_info->stride_width = schema_params->stride_w();
           current_op_info->stride_height = schema_params->stride_h();
           //current_op_info->activation =
@@ -332,6 +334,20 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
         TFLITE_DCHECK_EQ(output_tensor->dims->size, 4);
         current_op_params->output_height = output_tensor->dims->data[1];
         current_op_params->output_width = output_tensor->dims->data[2];
+
+        // compute padding now
+        // reference tensorflow/lite/kernels/padding.h: line 32
+        int offset = 0;
+        current_op_info->padding_height =
+            ComputePaddingWithOffset(current_op_params->stride_height, 
+                current_op_info->dilation_height_factor, current_op_params->input_height,
+                current_op_params->fileter_height, current_op_params->output_height, &offset);
+        current_op_info->padding_height_offset = offset;
+        current_op_info->padding_width =
+            ComputePaddingWithOffset(current_op_params->stride_width, 
+                current_op_info->dilation_width_factor, current_op_params->input_width,
+                current_op_params->fileter_width, current_op_params->output_height, &offset);
+        current_op_info->padding_width_offset = offset;
         
         break;
       }
