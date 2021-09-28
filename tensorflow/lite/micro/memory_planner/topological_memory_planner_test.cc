@@ -161,6 +161,58 @@ TF_LITE_MICRO_TEST(TestTopologicalBasics) {
       kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 1, &offset));
   TF_LITE_MICRO_EXPECT_EQ(0, offset);
 }
+
+TF_LITE_MICRO_TEST(TestTopologicalBasicsConv) {
+  tflite::MicroErrorReporter micro_error_reporter;
+
+  tflite::TopologicalMemoryPlanner planner(g_scratch_buffer, kScratchBufferSize, 1);
+  tflite::OpParams conv2dParams;
+  conv2dParams.convOpParams.input_height = 3;
+  conv2dParams.convOpParams.input_width = 3;
+  conv2dParams.convOpParams.input_channel = 3;
+  conv2dParams.convOpParams.filter_height = 3;
+  conv2dParams.convOpParams.filter_width = 3;
+  conv2dParams.convOpParams.output_height = 3;
+  conv2dParams.convOpParams.output_width = 3;
+  conv2dParams.convOpParams.output_channel = 5;
+  conv2dParams.convOpParams.padding_height = 1;
+  conv2dParams.convOpParams.padding_width = 1;
+  conv2dParams.convOpParams.padding_height_offset = 0;
+  conv2dParams.convOpParams.padding_width_offset = 0;
+  conv2dParams.convOpParams.stride_height = 1;
+  conv2dParams.convOpParams.stride_width = 1;
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 0, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv2dParams));
+  bool input_of_operators_buffer0[1] = {1};                                              
+  bool output_of_operators_buffer0[1] = {0};             
+  bool input_of_operators_buffer1[1] = {0};                                              
+  bool output_of_operators_buffer1[1] = {1};                                  
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 3*3*3, 0, 1, 
+                                            input_of_operators_buffer0,
+                                            output_of_operators_buffer0));
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 3*3*5, 1, 2, 
+                                            input_of_operators_buffer1,
+                                            output_of_operators_buffer1));
+
+  TF_LITE_MICRO_EXPECT_EQ(true,
+                          planner.DoAnyBuffersOverlap(&micro_error_reporter));
+
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(60),
+                          planner.GetMaximumMemorySize());
+
+  int offset = -1;
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 0, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(0, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 1, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(15, offset);
+}
+
 /*
 TF_LITE_MICRO_TEST(TestGreedyMedium) {
   tflite::MicroErrorReporter micro_error_reporter;
