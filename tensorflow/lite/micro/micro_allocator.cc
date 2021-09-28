@@ -28,6 +28,7 @@ limitations under the License.
 #include "tensorflow/lite/micro/compatibility.h"
 #include "tensorflow/lite/micro/memory_helpers.h"
 #include "tensorflow/lite/micro/memory_planner/greedy_memory_planner.h"
+#include "tensorflow/lite/micro/memory_planner/topological_memory_planner.h"
 #include "tensorflow/lite/micro/memory_planner/memory_planner.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/simple_memory_allocator.h"
@@ -437,7 +438,7 @@ TfLiteStatus CreatePlan(ErrorReporter* error_reporter,
   }
   return kTfLiteOk;
 }
-
+#ifdef TOPOLOGY_MEM_PLANNER 
 TfLiteStatus CreatePlanTopological(ErrorReporter* error_reporter,
                         TopologicalMemoryPlanner* planner,
                         const AllocationInfo* allocation_info,
@@ -478,6 +479,7 @@ TfLiteStatus CreatePlanTopological(ErrorReporter* error_reporter,
   }
   return kTfLiteOk;
 }
+#endif // TOPOLOGY_MEM_PLANNER 
 
 TfLiteStatus CommitPlan(ErrorReporter* error_reporter, MemoryPlanner* planner,
                         uint8_t* starting_point,
@@ -1150,7 +1152,11 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
   TF_LITE_ENSURE_STATUS(
       builder.GetOfflinePlannedOffsets(model, &offline_planner_offsets));
   TF_LITE_ENSURE_STATUS(
-      builder.AddTensors(subgraph, model, offline_planner_offsets, eval_tensors));
+      builder.AddTensors(subgraph, 
+#ifdef TOPOLOGY_MEM_PLANNER
+      model,
+#endif // TOPOLOGY_MEM_PLANNER
+      offline_planner_offsets, eval_tensors));
 
   internal::ScratchBufferRequest* scratch_buffer_requests =
       GetScratchBufferRequests();

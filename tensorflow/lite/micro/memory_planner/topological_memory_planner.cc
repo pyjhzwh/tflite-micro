@@ -36,7 +36,7 @@ char GetOrdinalCharacter(int i) {
 }
 
 }  // namespace
-
+/*
 // Simple stable in-place sort function. Not time-efficient for large arrays.
 // Would normally be in an anonymous namespace to keep it private, but we want
 // to be able to test it externally.
@@ -57,11 +57,11 @@ void SortInPlace(int* values, int* ids, int size) {
     }
   } while (any_swapped);
 }
-
+*/
 // First level: ascending order of values1
 // Second level: for the same values1, descending order of values2
 bool needSwap2Level(int* val1, int* val2, int idx1, int idx2){
-  return (val1[idx1] != val1[idx2]) ? val1[idx1] > val1[idx2] : val1[idx1] < val1[idx2];
+  return (val1[idx1] != val1[idx2]) ? val1[idx1] > val1[idx2] : val2[idx1] < val2[idx2];
 }
 
 // Simple stable in-place sort function. Not time-efficient for large arrays.
@@ -69,13 +69,12 @@ bool needSwap2Level(int* val1, int* val2, int idx1, int idx2){
 // to be able to test it externally.
 // First level: ascending order of values1
 // Second level: for the same values1, descending order of values2
-// Third priority: for the same values1 and values2, order by values3
 void SortInPlace2Level(int* val1s, int* val2s, int* ids, int size) {
   bool any_swapped;
   do {
     any_swapped = false;
     for (int i = 1; i < size; ++i) {
-      if (needSwap2Level(val1s, val2s, i, i-1)) 
+      if (needSwap2Level(val1s, val2s, i-1, i)) {
         const int val1_temp = val1s[i - 1];
         val1s[i - 1] = val1s[i];
         val1s[i] = val1_temp;
@@ -87,24 +86,24 @@ void SortInPlace2Level(int* val1s, int* val2s, int* ids, int size) {
         ids[i] = id_temp;
         any_swapped = true;
       }
-    }
+    } 
   } while (any_swapped);
 }
 
 
 // if we need forward physically padding input tensor, how many bytes needed
-int CalForwardConv2DMemPaddingLen(Conv2DOpParams* op_params) {
+int CalForwardConv2DMemPaddingLen(ConvOpParams* op_params) {
   // calculate actual memory size
-  int curend = 0
+  int curend = 0;
   for (int in_hi = 0; in_hi < op_params->input_height; ++in_hi) {
     for (int in_wi = 0; in_wi < op_params->input_width; ++in_wi) {
         // calculate the last child of in_hi, in_wi
         int child_hi = std::max(0, std::min(op_params->output_height-1, 
-            (int)(std::floor((float)(in_hi+op_params->padding)/(float)(op_params->filter_height))) ));
+            (int)(std::floor((float)(in_hi+op_params->padding_height)/(float)(op_params->filter_height))) ));
         int child_wi = std::max(0, std::min(op_params->output_width-1, 
-            (int)(std::floor((float)(in_wi+op_params->padding)/(float)(op_params->filter_width))) ));
+            (int)(std::floor((float)(in_wi+op_params->padding_width)/(float)(op_params->filter_width))) ));
         // need to +1, because output should not overwrite its dependent inputs
-        int outmem_pos_lastchild = (child_hi * op_params->output_width + child_wi + 1) * op_params->out_channel;
+        int outmem_pos_lastchild = (child_hi * op_params->output_width + child_wi + 1) * op_params->output_channel;
         curend = std::max(curend, outmem_pos_lastchild);
         curend += op_params->input_channel;
     }
@@ -113,24 +112,31 @@ int CalForwardConv2DMemPaddingLen(Conv2DOpParams* op_params) {
   return curend - op_params->input_height * op_params->input_width * op_params->input_channel;
 }
 
+
+bool IsOverlapOrInplaceOperator( BuiltinOperator op_type) {
+  // TODO: add more op_type later
+  if( op_type == BuiltinOperator_CONV_2D)
+    return true;
+  return false;
+}
+
 TopologicalMemoryPlanner::TopologicalMemoryPlanner(unsigned char* scratch_buffer,
                                          int scratch_buffer_size, int operator_size)
     : buffer_count_(0), need_to_calculate_offsets_(true) {
   // Allocate the arrays we need within the scratch buffer arena.
-  max_buffer_count_ = (scratch_buffer_size - sizeof(OperatorInfo) * operator_size) / 
-                      (per_buffer_size() + sizeof(int) * 2 * operator_size_);
-  operator_size_ = operator_size;
+  max_buffer_count_ = (scratch_buffer_size - sizeof(OperatorRequirements) * operator_size) / per_buffer_size();
+  operators_size_ = operator_size;
 
   unsigned char* next_free = scratch_buffer;
   requirements_ = reinterpret_cast<BufferRequirements*>(next_free);
   next_free += sizeof(BufferRequirements) * max_buffer_count_;
 
   // Allocate bool arrays for each requirements_
-  for (int i=0; i < operator_size; ++i) {
+  for (int i=0; i < max_buffer_count_; ++i) {
     requirements_[i].input_of_operators = reinterpret_cast<bool*>(next_free);
-    next_free += sizeof(bool) * operator_size;
+    next_free += sizeof(bool) * operators_size_;
     requirements_[i].output_of_operators = reinterpret_cast<bool*>(next_free);
-    next_free += sizeof(bool) * operator_size;
+    next_free += sizeof(bool) * operators_size_;
   }
 
   buffer_created_sorted_ = reinterpret_cast<int*>(next_free);
@@ -147,8 +153,8 @@ TopologicalMemoryPlanner::TopologicalMemoryPlanner(unsigned char* scratch_buffer
   next_free += sizeof(ListEntry) * max_buffer_count_;
   
   // Allocate space for struct of Operator
-  operator_info_ = reinterpret_cast<OperatorInfo*>(next_free);
-  next_free += sizeof(OperatorInfo) * operator_size_;
+  ops_requirements_ = reinterpret_cast<OperatorRequirements*>(next_free);
+  next_free += sizeof(OperatorRequirements) * operators_size_;
 
   buffer_offsets_ = reinterpret_cast<int*>(next_free);
 }
@@ -161,16 +167,15 @@ TopologicalMemoryPlanner::~TopologicalMemoryPlanner() {
 TfLiteStatus TopologicalMemoryPlanner::AddOperatorInfo(
   tflite::ErrorReporter* error_reporter, int operator_id, BuiltinOperator op_type, 
   OpParams* op_params) {
-    if (operator_id >= operator_size_) {
+    if (operator_id >= operators_size_) {
       TF_LITE_REPORT_ERROR(error_reporter, "Operator index larger than size (%d)",
-                         operator_size_);
+                         operators_size_);
       return kTfLiteError;
     }
-    OperatorInfo* current_op = &operator_info_[operator_id];
+    OperatorRequirements* current_op = &ops_requirements_[operator_id];
     current_op->op_type = op_type;
-    switch(op_type) {
-      case BuiltinOperator_CONV_2D:
-        ConvOpParams* current_op_params = &(current_op->params->convOpParams);
+    if (op_type == BuiltinOperator_CONV_2D) {
+        ConvOpParams* current_op_params = &(current_op->params.convOpParams);
         ConvOpParams* input_op_params = &(op_params->convOpParams);
         current_op_params->input_height = input_op_params->input_height;
         current_op_params->input_width = input_op_params->input_width;
@@ -180,24 +185,24 @@ TfLiteStatus TopologicalMemoryPlanner::AddOperatorInfo(
         current_op_params->output_height = input_op_params->output_height;
         current_op_params->output_width = input_op_params->output_width;
         current_op_params->output_channel = input_op_params->output_channel;
-        current_op_params->padding = input_op_params->padding;
+        current_op_params->padding_height = input_op_params->padding_height;
+        current_op_params->padding_width = input_op_params->padding_width;
+        current_op_params->padding_height_offset = input_op_params->padding_height_offset;
+        current_op_params->padding_width_offset = input_op_params->padding_width_offset;
         current_op_params->stride_width = input_op_params->stride_width;
         current_op_params->stride_height = input_op_params->stride_height;
         current_op_params->dilation_width_factor = input_op_params->dilation_width_factor;
         current_op_params->dilation_height_factor = input_op_params->dilation_height_factor;
-        break;
-
-      default:
-        break;
     }
+
+    // TODO: other opeations
     
     return kTfLiteOk;
 }
 
 TfLiteStatus TopologicalMemoryPlanner::AddBuffer(
     tflite::ErrorReporter* error_reporter, int size, int first_time_used,
-    int last_time_used, bool* input_of_operators, bool* output_of_operators,
-    int operator_size) {
+    int last_time_used, bool* input_of_operators, bool* output_of_operators) {
   if (buffer_count_ >= max_buffer_count_) {
     TF_LITE_REPORT_ERROR(error_reporter, "Too many buffers (max is %d)",
                          max_buffer_count_);
@@ -210,11 +215,11 @@ TfLiteStatus TopologicalMemoryPlanner::AddBuffer(
   current->offline_offset = kOnlinePlannedBuffer;
   // deep copy of input_of_operators and output_of_operators arrays;
   bool* current_input_of_operators = current->input_of_operators;
-  for (int i = 0; i < operator_size; ++i) {
+  for (int i = 0; i < operators_size_; ++i) {
     current_input_of_operators[i] = input_of_operators[i];
   }
   bool* current_output_of_operators = current->output_of_operators;
-  for (int i = 0; i < operator_size; ++i) {
+  for (int i = 0; i < operators_size_; ++i) {
     current_output_of_operators[i] = output_of_operators[i];
   }
   ++buffer_count_;
@@ -225,10 +230,10 @@ TfLiteStatus TopologicalMemoryPlanner::AddBuffer(
 TfLiteStatus TopologicalMemoryPlanner::AddBuffer(
     tflite::ErrorReporter* error_reporter, int size, int first_time_used,
     int last_time_used, bool* input_of_operators, bool* output_of_operators,
-    int operator_size, int offline_offset) {
+    int offline_offset) {
   BufferRequirements* current = &requirements_[buffer_count_];
-  if (AddBuffer(error_reporter, size, first_time_used, input_of_operators, 
-      output_of_operators, operator_size, last_time_used) !=
+  if (AddBuffer(error_reporter, size, first_time_used, last_time_used, 
+      input_of_operators, output_of_operators, operators_size_) !=
       kTfLiteOk) {
     return kTfLiteError;
   }
@@ -279,16 +284,16 @@ TopologicalMemoryPlanner::NextSimultaneouslyActiveBuffer(
   return result;
 }
 
-int TopologicalMemoryPlanner::CalculatePaddingLen(OperatorRequirements* op_requirement, 
-                                                  int in_tensor_id, int out_tensor_id) {
+int TopologicalMemoryPlanner::CalculatePaddingLen(BufferRequirements* prior_requirements, 
+    BufferRequirements* current_requirements) {
 
-  BuiltinOperator op_type = op_requirement_->op_type;
+  BuiltinOperator op_type = ops_requirements_->op_type;
   // if node is conv2d
   if (op_type == BuiltinOperator_CONV_2D) {
     // if not residual layer
-    if (requirements_[in_tensor_id].last_time_used == requirements_[out_tensor_id].first_time_used) {
-      return calConv2DMemPaddingLen(op_params->Conv2DOpParams) + \
-        requirements_[in_tensor_id].size - requirements_[out_tensor_id].size;
+    if (prior_requirements->last_time_used == current_requirements->first_time_used) {
+      return CalForwardConv2DMemPaddingLen(&(ops_requirements_->params.convOpParams)) + \
+        prior_requirements->size - current_requirements->size;
     }
   }
   // if node is in-place operation
@@ -297,7 +302,7 @@ int TopologicalMemoryPlanner::CalculatePaddingLen(OperatorRequirements* op_requi
     return 0;
   }
   
-
+  return 0;
 }
 
 int TopologicalMemoryPlanner::CalCurrentOffset(
@@ -315,8 +320,7 @@ int TopologicalMemoryPlanner::CalCurrentOffset(
         // used later, so we can safely overwrite it
         if ( prior_requirements->input_of_operators[i] && 
             prior_requirements->last_time_used == current_requirements->first_time_used) {
-              int padding = CalculatePaddingLen(&ops_requirements_[i], prior_requirements_index, 
-                                  current_requirements_index);
+              int padding = CalculatePaddingLen(prior_requirements, current_requirements);
               // mark operator as reversed computation
               if(padding > 0) {
                 ops_requirements_[i].reverse=true;
@@ -360,17 +364,24 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
   // of last_used time
   // with hundreds of buffers. Do not sort the offline planned offsets.
   SortInPlace2Level(&buffer_created_sorted_[idx_from_head],
-                    &buffer_last_used_sorted_[idx_from_head]
+                    &buffer_last_used_sorted_[idx_from_head],
                      &buffer_ids_sorted_[idx_from_head],
                      buffer_count_ - idx_from_head);
 
   // place buffers with asending time (oeprator)
   first_entry_index_ = 0;
-  next_free_entry_ = 0;
-  int current_start_time = buffer_created_sorted_[first_entry_index_];
-  int idx = 0;
-  for (int idx = 0; i < buffer_count_; ++i) {
-    int buffer_id = buffer_ids_sorted_[idx];
+  next_free_entry_ = 1;
+  ListEntry* first_entry = &buffers_sorted_by_offset_[first_entry_index_];
+  first_entry->next_entry_index = -1;  // to mark the entry as end of list
+  int buffer_id = buffer_ids_sorted_[0];
+  first_entry->requirements_index = buffer_id;
+  if (requirements_[buffer_id].offline_offset == kOnlinePlannedBuffer) {
+    buffer_offsets_[buffer_id] = 0;
+  }
+  first_entry->offset = buffer_offsets_[buffer_id];
+
+  for (int idx = 1; idx < buffer_count_; ++idx) {
+    buffer_id = buffer_ids_sorted_[idx];
     BufferRequirements* wanted_requirements = &requirements_[buffer_id];
     const int wanted_size = wanted_requirements->size;
     const int wanted_first_time_used = wanted_requirements->first_time_used;
@@ -383,7 +394,7 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
       while(true) {
         // find the gap to place the current buffer_id;
         ListEntry* next_entry = NextSimultaneouslyActiveBuffer(
-            prior_entry, wanted_first_time_used);
+            prior_entry, wanted_first_time_used, wanted_last_time_used);
         
         //If we did not find a good gap in the previous steps
         if (prior_entry) {

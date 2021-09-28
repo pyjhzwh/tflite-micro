@@ -26,6 +26,7 @@ limitations under the License.
 #include "tensorflow/lite/micro/simple_memory_allocator.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/schema/schema_utils.h"
+#include "tensorflow/lite/kernels/padding.h"
 
 namespace tflite {
 

@@ -20,10 +20,9 @@ limitations under the License.
 #include "tensorflow/lite/micro/compatibility.h"
 #include "tensorflow/lite/micro/memory_planner/memory_planner.h"
 #include "tensorflow/lite/schema/schema_generated.h"
+#include "tensorflow/lite/kernels/internal/types.h"
 
 namespace tflite {
-
-constexpr int kOnlinePlannedBuffer = -1;
 
 // A memory planner that uses a topological algorithm to arrange buffers in memory
 // to minimize the overall arena size needed.
@@ -56,27 +55,26 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   // calling AddBuffer(). The memory can be reused once you're done with the
   // planner, as long as you copy the calculated offsets to another location.
   // Each buffer requires about 36 bytes of scratch.
-  TopologicalMemoryPlanner(unsigned char* scratch_buffer, int scratch_buffer_size);
+  TopologicalMemoryPlanner(unsigned char* scratch_buffer, int scratch_buffer_size,
+                          int operator_size);
   ~TopologicalMemoryPlanner() override;
 
-  // Record input of operator with operator_id
-  TfLiteStatus AddOperatorInput(tflite::ErrorReporter* error_reporter, 
-                                int operator_id, int input_buffer_id);
-
-  // Record output of operator with operator_id
-  TfLiteStatus AddOperatorOutput(tflite::ErrorReporter* error_reporter, 
-                                int operator_id, int output_buffer_id);
+  // Record operator info
+  TfLiteStatus AddOperatorInfo(tflite::ErrorReporter* error_reporter, 
+                              int operator_id, BuiltinOperator op_type, 
+                              OpParams* op_params);
 
   // Record details of a buffer we want to place.
   TfLiteStatus AddBuffer(ErrorReporter* error_reporter, int size,
                          int first_time_used, int last_time_used, 
-                         int operator_id) override;
+                         bool* input_of_operators, bool* output_of_operators);
 
   // Record details of an offline planned buffer offset we want to place.
   // offline_offset is the buffer offset from the start of the arena.
   TfLiteStatus AddBuffer(ErrorReporter* error_reporter, int size,
                          int first_time_used, int last_time_used,
-                         int operator_id, int offline_offset);
+                         bool* input_of_operators, bool* output_of_operators,
+                         int offline_offset);
 
   // Returns the high-water mark of used memory. This is the minimum size of a
   // memory arena you'd need to allocate to hold these buffers.
@@ -117,6 +115,27 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   }
 
  private:
+  struct BufferRequirements {
+    int size;
+    int offline_offset;
+    int first_time_used;
+    int last_time_used;
+    bool* input_of_operators;
+    bool* output_of_operators;
+  };
+
+  // Working arrays used during the layout algorithm.
+  BufferRequirements* requirements_;
+  struct OperatorRequirements
+  {
+    BuiltinOperator op_type; // operator type// TODO
+    OpParams params; // parameters for current node, like height, width, 
+                  // kernel size, etc.
+    bool reverse; // reversed computation or not, default is false (forward)
+  };
+  // Working arrays used during the layout algorithm.
+  OperatorRequirements* ops_requirements_;
+
   // Whether a buffer is active in a given time range.
   bool DoesEntryOverlapInTime(const ListEntry* entry, const int first_time_used,
                               const int last_time_used) const;
@@ -126,6 +145,19 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   ListEntry* NextSimultaneouslyActiveBuffer(const ListEntry* start,
                                             const int first_time_used,
                                             const int last_time_used);
+  
+  // If operator is in-place, no need to reserve
+  int CalculatePaddingLen(BufferRequirements* prior_requirements, 
+                          BufferRequirements* current_requirements);
+  
+  // Calculate the offset for current buffer given the non-conflict prior buffer
+  // For in-place operator or self-convolution, current buffer is allowed to 
+  // have overlap with its input buffer area; Otherwise, use the normal way to
+  // calculate the current buffer offset
+  int CalCurrentOffset(ListEntry* prior_entry, 
+                      BufferRequirements* prior_requirements, 
+                      BufferRequirements* current_requirements);
+
 
   // If there isn't an up to date plan, calculate a new one.
   void CalculateOffsetsIfNeeded();
@@ -138,17 +170,7 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   int buffer_count_;
 
   // Records the client-provided information about each buffer.
-  struct BufferRequirements {
-    int size;
-    int offline_offset;
-    int first_time_used;
-    int last_time_used;
-    bool* input_of_operators;
-    bool* output_of_operators;
-  };
-
-  // Working arrays used during the layout algorithm.
-  BufferRequirements* requirements_;
+  
   // buffer_sizes_sorted_ and buffer_ids_sorted_ are sorted according to:
   //   {
   //     offline planned buffers,
@@ -170,16 +192,7 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   bool need_to_calculate_offsets_;
 
   // Record the operator inputs and outputs
-  struct OperatorRequirements
-  {
-    BuiltinOperator op_type; // operator type// TODO
-    OpParams params; // parameters for current node, like height, width, 
-                  // kernel size, etc.
-    bool reverse; // reversed computation or not, default is false (forward)
-  };
-  // Working arrays used during the layout algorithm.
-  OperatorRequirements* ops_requirements_;
-
+  
   // The number of operators in graph
   int operators_size_;
   

@@ -21,7 +21,6 @@ limitations under the License.
 
 namespace tflite {
 
-constexpr int kOnlinePlannedBuffer = -1;
 
 // A memory planner that uses a greedy algorithm to arrange buffers in memory
 // to minimize the overall arena size needed.
@@ -59,7 +58,7 @@ class GreedyMemoryPlanner : public MemoryPlanner {
 
   // Record details of a buffer we want to place.
   TfLiteStatus AddBuffer(ErrorReporter* error_reporter, int size,
-                         int first_time_used, int last_time_used) override;
+                         int first_time_used, int last_time_used);
 
   // Record details of an offline planned buffer offset we want to place.
   // offline_offset is the buffer offset from the start of the arena.

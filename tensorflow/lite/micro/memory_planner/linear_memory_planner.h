@@ -29,7 +29,7 @@ class LinearMemoryPlanner : public MemoryPlanner {
   ~LinearMemoryPlanner() override;
 
   TfLiteStatus AddBuffer(tflite::ErrorReporter* error_reporter, int size,
-                         int first_time_used, int last_time_used) override;
+                         int first_time_used, int last_time_used);
 
   size_t GetMaximumMemorySize() override;
   int GetBufferCount() override;

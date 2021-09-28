@@ -56,6 +56,23 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "topological_memory_planner",
+    srcs = [
+        "topological_memory_planner.cc",
+    ],
+    hdrs = [
+        "topological_memory_planner.h",
+    ],
+    copts = micro_copts(),
+    deps = [
+        ":memory_planner",
+        "//tensorflow/lite/micro:micro_compatibility",
+        "//tensorflow/lite/micro:micro_error_reporter",
+        "//tensorflow/lite/micro:micro_string",
+    ],
+)
+
 cc_test(
     name = "linear_memory_planner_test",
     srcs = [
@@ -77,3 +94,15 @@ cc_test(
         "//tensorflow/lite/micro/testing:micro_test",
     ],
 )
+
+cc_test(
+    name = "topological_memory_planner_test",
+    srcs = [
+        "topological_memory_planner_test.cc",
+    ],
+    deps = [
+        ":topological_memory_planner",
+        "//tensorflow/lite/micro/testing:micro_test",
+    ],
+)
+

@@ -21,6 +21,8 @@ limitations under the License.
 
 namespace tflite {
 
+constexpr int kOnlinePlannedBuffer = -1;
+
 // Interface class for planning the layout of memory buffers during the
 // execution of a graph.
 // It's designed to be used by a client that iterates in any order through the
@@ -53,10 +55,18 @@ class MemoryPlanner {
   // result, so the buffer information that's passed into the N-th call of
   // this method will be used as the buffer_index argument to
   // GetOffsetForBuffer().
+  /*
   virtual TfLiteStatus AddBuffer(tflite::ErrorReporter* error_reporter,
                                  int size, int first_time_used,
                                  int last_time_used) = 0;
 
+  virtual TfLiteStatus AddBuffer(tflite::ErrorReporter* error_reporter,
+                                 int size, int first_time_used,
+                                 int last_time_used, 
+                                 bool* input_of_operators, 
+                                 bool* output_of_operators,
+                                 int operator_size) = 0;                              
+    */
   // The largest contiguous block of memory that's needed to hold the layout.
   virtual size_t GetMaximumMemorySize() = 0;
   // How many buffers have been added to the planner.

@@ -992,6 +992,32 @@ struct LeakyReluParams {
   int32_t output_shift_identity;
 };
 
+// used in toplogical_memory_planner
+struct ConvOpParams {
+  PaddingType padding_type;
+  int padding_height;
+  int padding_width;
+  int padding_height_offset;
+  int padding_width_offset;
+  // TODO(starka): This was just "stride", so check that width+height is OK.
+  int stride_width;
+  int stride_height;
+  int dilation_width_factor;
+  int dilation_height_factor;
+  int input_height;
+  int input_width;
+  int input_channel;
+  int filter_height;
+  int filter_width;
+  int output_height;
+  int output_width;
+  int output_channel;
+};
+
+union OpParams {
+  struct ConvOpParams convOpParams;
+};
+
 template <typename P>
 inline void SetActivationParams(float min, float max, P* params) {
   params->float_activation_min = min;
