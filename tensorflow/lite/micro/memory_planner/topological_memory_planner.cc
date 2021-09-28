@@ -99,9 +99,9 @@ int CalForwardConv2DMemPaddingLen(ConvOpParams* op_params) {
     for (int in_wi = 0; in_wi < op_params->input_width; ++in_wi) {
         // calculate the last child of in_hi, in_wi
         int child_hi = std::max(0, std::min(op_params->output_height-1, 
-            (int)(std::floor((float)(in_hi+op_params->padding_height)/(float)(op_params->filter_height))) ));
+            (int)(std::floor((float)(in_hi+op_params->padding_height)/(float)(op_params->stride_height))) ));
         int child_wi = std::max(0, std::min(op_params->output_width-1, 
-            (int)(std::floor((float)(in_wi+op_params->padding_width)/(float)(op_params->filter_width))) ));
+            (int)(std::floor((float)(in_wi+op_params->padding_width)/(float)(op_params->stride_width))) ));
         // need to +1, because output should not overwrite its dependent inputs
         int outmem_pos_lastchild = (child_hi * op_params->output_width + child_wi + 1) * op_params->output_channel;
         curend = std::max(curend, outmem_pos_lastchild);
@@ -582,10 +582,12 @@ bool TopologicalMemoryPlanner::DoAnyBuffersOverlap(ErrorReporter* error_reporter
     const int a_first_time_used = a_requirements->first_time_used;
     const int a_last_time_used = a_requirements->last_time_used;
     const int a_end_offset = a_start_offset + a_requirements->size;
-    for (int j = 0; j < buffer_count_; ++j) {
+    for (int j = i+1; j < buffer_count_; ++j) {
+      /*
       if (i == j) {
         continue;
       }
+      */
       BufferRequirements* b_requirements = &requirements_[j];
       const int b_start_offset = buffer_offsets_[j];
       const int b_first_time_used = b_requirements->first_time_used;
