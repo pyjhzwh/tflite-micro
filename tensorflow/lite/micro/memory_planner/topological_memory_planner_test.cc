@@ -213,34 +213,99 @@ TF_LITE_MICRO_TEST(TestTopologicalBasicsConv) {
   TF_LITE_MICRO_EXPECT_EQ(15, offset);
 }
 
-/*
-TF_LITE_MICRO_TEST(TestGreedyMedium) {
-  tflite::MicroErrorReporter micro_error_reporter;
 
-  tflite::GreedyMemoryPlanner planner(g_scratch_buffer, kScratchBufferSize);
+TF_LITE_MICRO_TEST(TestTopologicalMedium) {
+  tflite::MicroErrorReporter micro_error_reporter;
+  // 0              1                   2                  3               4          
+  // buffer0 -> conv2d -> buffer1 -> conv2d -> buffer2 -> add -> buffer 4
+  // buffer3 ----------------------------------------------|
+  tflite::TopologicalMemoryPlanner planner(g_scratch_buffer, kScratchBufferSize, 3);
+
+  tflite::OpParams conv2dParams;
+  conv2dParams.convOpParams.input_height = 3;
+  conv2dParams.convOpParams.input_width = 3;
+  conv2dParams.convOpParams.input_channel = 3;
+  conv2dParams.convOpParams.filter_height = 3;
+  conv2dParams.convOpParams.filter_width = 3;
+  conv2dParams.convOpParams.output_height = 3;
+  conv2dParams.convOpParams.output_width = 3;
+  conv2dParams.convOpParams.output_channel = 5;
+  conv2dParams.convOpParams.padding_height = 1;
+  conv2dParams.convOpParams.padding_width = 1;
+  conv2dParams.convOpParams.padding_height_offset = 0;
+  conv2dParams.convOpParams.padding_width_offset = 0;
+  conv2dParams.convOpParams.stride_height = 1;
+  conv2dParams.convOpParams.stride_width = 1;
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 10, 0, 1));
+                          planner.AddOperatorInfo(&micro_error_reporter, 0, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv2dParams));
+
+  tflite::OpParams conv2dParams2;
+  conv2dParams.convOpParams.input_height = 3;
+  conv2dParams.convOpParams.input_width = 3;
+  conv2dParams.convOpParams.input_channel = 5;
+  conv2dParams.convOpParams.filter_height = 3;
+  conv2dParams.convOpParams.filter_width = 3;
+  conv2dParams.convOpParams.output_height = 3;
+  conv2dParams.convOpParams.output_width = 3;
+  conv2dParams.convOpParams.output_channel = 3;
+  conv2dParams.convOpParams.padding_height = 1;
+  conv2dParams.convOpParams.padding_width = 1;
+  conv2dParams.convOpParams.padding_height_offset = 0;
+  conv2dParams.convOpParams.padding_width_offset = 0;
+  conv2dParams.convOpParams.stride_height = 1;
+  conv2dParams.convOpParams.stride_width = 1;
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 20, 1, 2));
+                          planner.AddOperatorInfo(&micro_error_reporter, 1, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv2dParams2));
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 30, 2, 3));
+                          planner.AddOperatorInfo(&micro_error_reporter, 2, 
+                                                tflite::BuiltinOperator_ADD, nullptr));                                              
+
+  bool input_of_operators_buffer0[3] = {1,0,0};                                              
+  bool output_of_operators_buffer0[3] = {0,0,0};             
+  bool input_of_operators_buffer1[3] = {0,1,0};                                              
+  bool output_of_operators_buffer1[3] = {1,0,0};        
+  bool input_of_operators_buffer2[3] = {0,0,1};                                              
+  bool output_of_operators_buffer2[3] = {0,1,0};                   
+  bool input_of_operators_buffer3[3] = {0,0,1};                                              
+  bool output_of_operators_buffer3[3] = {0,0,0};    
+  bool input_of_operators_buffer4[3] = {0,0,0};                                              
+  bool output_of_operators_buffer4[3] = {0,0,1};                 
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 40, 3, 4));
+                          planner.AddBuffer(&micro_error_reporter, 3*3*3, 0, 1, 
+                                            input_of_operators_buffer0,
+                                            output_of_operators_buffer0));
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 50, 0, 1));
+                          planner.AddBuffer(&micro_error_reporter, 3*3*5, 1, 2, 
+                                            input_of_operators_buffer1,
+                                            output_of_operators_buffer1));
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 3*3*3, 2, 3, 
+                                            input_of_operators_buffer2,
+                                            output_of_operators_buffer2)); 
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 3*3*3, 0, 3, 
+                                            input_of_operators_buffer3,
+                                            output_of_operators_buffer3));         
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 3*3*3, 3, 4, 
+                                            input_of_operators_buffer4,
+                                            output_of_operators_buffer4));                                                                                                                  
+
 
   int offset = -1;
   TF_LITE_MICRO_EXPECT_EQ(
       kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 0, &offset));
-  TF_LITE_MICRO_EXPECT_EQ(50, offset);
+  TF_LITE_MICRO_EXPECT_EQ(3*3*3, offset);
 
   TF_LITE_MICRO_EXPECT_EQ(
       kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 1, &offset));
-  TF_LITE_MICRO_EXPECT_EQ(70, offset);
+  TF_LITE_MICRO_EXPECT_EQ(3*3*3+15, offset);
 
   TF_LITE_MICRO_EXPECT_EQ(
       kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 2, &offset));
-  TF_LITE_MICRO_EXPECT_EQ(40, offset);
+  TF_LITE_MICRO_EXPECT_EQ(3*3*3, offset);
 
   TF_LITE_MICRO_EXPECT_EQ(
       kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 3, &offset));
@@ -252,13 +317,13 @@ TF_LITE_MICRO_TEST(TestGreedyMedium) {
 
   planner.PrintMemoryPlan();
 
-  TF_LITE_MICRO_EXPECT_EQ(false,
+  TF_LITE_MICRO_EXPECT_EQ(true,
                           planner.DoAnyBuffersOverlap(&micro_error_reporter));
 
-  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(90),
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(60+3*3*3),
                           planner.GetMaximumMemorySize());
 }
-
+/*
 TF_LITE_MICRO_TEST(TestPersonDetectionModel) {
   tflite::MicroErrorReporter micro_error_reporter;
 

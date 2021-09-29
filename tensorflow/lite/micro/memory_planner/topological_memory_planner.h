@@ -147,7 +147,8 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
                                             const int last_time_used);
   
   // If operator is in-place, no need to reserve
-  int CalculatePaddingLen(BufferRequirements* prior_requirements, 
+  int CalculatePaddingLen(OperatorRequirements* op_requirements,
+                          BufferRequirements* prior_requirements, 
                           BufferRequirements* current_requirements);
   
   // Calculate the offset for current buffer given the non-conflict prior buffer
@@ -158,6 +159,12 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
                       BufferRequirements* prior_requirements, 
                       BufferRequirements* current_requirements);
 
+  // Calculate the wnated gap 
+  // for Conv2d, we would allow some overlapping, so the wanted_gap is the
+  // padding len if we would like to physically do the forward padding;
+  // Otherwise, the wanted gap is just the current buffer size
+  int CalWantedGap(ListEntry* next_entry, 
+    BufferRequirements* current_requirements, const int wanted_size);
 
   // If there isn't an up to date plan, calculate a new one.
   void CalculateOffsetsIfNeeded();

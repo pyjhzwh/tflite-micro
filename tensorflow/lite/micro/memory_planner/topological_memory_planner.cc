@@ -115,7 +115,7 @@ int CalForwardConv2DMemPaddingLen(ConvOpParams* op_params) {
 
 bool IsOverlapOrInplaceOperator( BuiltinOperator op_type) {
   // TODO: add more op_type later
-  if( op_type == BuiltinOperator_CONV_2D)
+  if( (op_type == BuiltinOperator_CONV_2D) || (op_type == BuiltinOperator_ADD))
     return true;
   return false;
 }
@@ -284,15 +284,16 @@ TopologicalMemoryPlanner::NextSimultaneouslyActiveBuffer(
   return result;
 }
 
-int TopologicalMemoryPlanner::CalculatePaddingLen(BufferRequirements* prior_requirements, 
+int TopologicalMemoryPlanner::CalculatePaddingLen(OperatorRequirements* op_requirements,
+    BufferRequirements* prior_requirements, 
     BufferRequirements* current_requirements) {
 
-  BuiltinOperator op_type = ops_requirements_->op_type;
+  BuiltinOperator op_type = op_requirements->op_type;
   // if node is conv2d
   if (op_type == BuiltinOperator_CONV_2D) {
     // if not residual layer
     if (prior_requirements->last_time_used == current_requirements->first_time_used) {
-      return CalForwardConv2DMemPaddingLen(&(ops_requirements_->params.convOpParams)) + \
+      return CalForwardConv2DMemPaddingLen(&(op_requirements->params.convOpParams)) + \
         prior_requirements->size - current_requirements->size;
     }
   }
@@ -320,7 +321,8 @@ int TopologicalMemoryPlanner::CalCurrentOffset(
         // used later, so we can safely overwrite it
         if ( prior_requirements->input_of_operators[i] && 
             prior_requirements->last_time_used == current_requirements->first_time_used) {
-              int padding = CalculatePaddingLen(prior_requirements, current_requirements);
+              int padding = CalculatePaddingLen(&ops_requirements_[i],prior_requirements, 
+                                                current_requirements);
               // mark operator as reversed computation
               if(padding > 0) {
                 ops_requirements_[i].reverse=true;
@@ -333,6 +335,34 @@ int TopologicalMemoryPlanner::CalCurrentOffset(
   return prior_entry->offset + prior_requirements->size;
 }
 
+
+int TopologicalMemoryPlanner::CalWantedGap(ListEntry* next_entry, 
+    BufferRequirements* current_requirements, const int wanted_size) {
+
+  if (current_requirements == nullptr)
+    return wanted_size;
+
+  BufferRequirements* next_requirements = &requirements_[next_entry->requirements_index];
+  for (int i = 0; i < operators_size_; ++i) {
+    if (current_requirements->output_of_operators[i]) {
+      BuiltinOperator op_type = ops_requirements_[i].op_type;
+      if ( IsOverlapOrInplaceOperator(op_type) ) {
+        // if next buffer is the input of the operator i of which
+        // current buffer is the output 
+        // the second == is to ensure it is the next buffer will not be
+        // used later, so we can safely overwrite it
+        if ( next_requirements->input_of_operators[i] && 
+            next_requirements->last_time_used == current_requirements->first_time_used) {
+              if (op_type == BuiltinOperator_CONV_2D)
+                return CalForwardConv2DMemPaddingLen(&(ops_requirements_[i].params.convOpParams));
+              else
+                return 0;
+        }
+      }
+    }
+  }    
+  return wanted_size;
+}
 
 void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
   if (!need_to_calculate_offsets_ || (buffer_count_ == 0)) {
@@ -395,10 +425,11 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
         // find the gap to place the current buffer_id;
         ListEntry* next_entry = NextSimultaneouslyActiveBuffer(
             prior_entry, wanted_first_time_used, wanted_last_time_used);
-        
+
+        BufferRequirements* candidate_requirements = nullptr;
         //If we did not find a good gap in the previous steps
         if (prior_entry) {
-          BufferRequirements* candidate_requirements =
+          candidate_requirements =
             &requirements_[prior_entry->requirements_index];
           // if the current buffer could have overlap or in-place
           // with the prior_entry, calculate the prior_entry_offset
@@ -416,7 +447,8 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
         }
         // Find out how much space there is between us and the next buffer.
         const int gap = next_entry->offset - candidate_offset;
-        if (gap >= wanted_size) {
+        int wanted_gap = CalWantedGap(next_entry, wanted_requirements, wanted_size);
+        if (gap >= wanted_gap) {
           // This entry has a big enough gap between it and the next, so
           // use it!
           break;
