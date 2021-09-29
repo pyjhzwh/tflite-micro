@@ -107,9 +107,10 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   static size_t per_buffer_size() {
     const int per_buffer_size =
         sizeof(BufferRequirements) +  // requirements_
-        //sizeof(int) +                 // buffer_sizes_sorted_
-        //sizeof(int) +                 // buffer_ids_sorted_
-        //sizeof(ListEntry) +           // buffers_sorted_by_offset_
+        sizeof(int) +                 // buffer_created_sorted_
+        sizeof(int) +                 // buffer_last_used_sorted_
+        sizeof(int) +                 // buffer_ids_sorted_
+        sizeof(ListEntry) +           // buffers_sorted_by_offset_
         sizeof(int);                  // buffer_offsets_;
     return per_buffer_size;
   }

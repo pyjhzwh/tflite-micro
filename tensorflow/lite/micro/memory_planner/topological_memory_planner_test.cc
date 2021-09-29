@@ -241,20 +241,20 @@ TF_LITE_MICRO_TEST(TestTopologicalMedium) {
                                                 tflite::BuiltinOperator_CONV_2D, &conv2dParams));
 
   tflite::OpParams conv2dParams2;
-  conv2dParams.convOpParams.input_height = 3;
-  conv2dParams.convOpParams.input_width = 3;
-  conv2dParams.convOpParams.input_channel = 5;
-  conv2dParams.convOpParams.filter_height = 3;
-  conv2dParams.convOpParams.filter_width = 3;
-  conv2dParams.convOpParams.output_height = 3;
-  conv2dParams.convOpParams.output_width = 3;
-  conv2dParams.convOpParams.output_channel = 3;
-  conv2dParams.convOpParams.padding_height = 1;
-  conv2dParams.convOpParams.padding_width = 1;
-  conv2dParams.convOpParams.padding_height_offset = 0;
-  conv2dParams.convOpParams.padding_width_offset = 0;
-  conv2dParams.convOpParams.stride_height = 1;
-  conv2dParams.convOpParams.stride_width = 1;
+  conv2dParams2.convOpParams.input_height = 3;
+  conv2dParams2.convOpParams.input_width = 3;
+  conv2dParams2.convOpParams.input_channel = 5;
+  conv2dParams2.convOpParams.filter_height = 3;
+  conv2dParams2.convOpParams.filter_width = 3;
+  conv2dParams2.convOpParams.output_height = 3;
+  conv2dParams2.convOpParams.output_width = 3;
+  conv2dParams2.convOpParams.output_channel = 3;
+  conv2dParams2.convOpParams.padding_height = 1;
+  conv2dParams2.convOpParams.padding_width = 1;
+  conv2dParams2.convOpParams.padding_height_offset = 0;
+  conv2dParams2.convOpParams.padding_width_offset = 0;
+  conv2dParams2.convOpParams.stride_height = 1;
+  conv2dParams2.convOpParams.stride_width = 1;
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
                           planner.AddOperatorInfo(&micro_error_reporter, 1, 
                                                 tflite::BuiltinOperator_CONV_2D, &conv2dParams2));
@@ -401,17 +401,38 @@ TF_LITE_MICRO_TEST(TestPersonDetectionModel) {
   TF_LITE_MICRO_EXPECT_GT(static_cast<size_t>(241027),
                           planner.GetMaximumMemorySize());
 }
-
-TF_LITE_MICRO_TEST(TestOverlapCase) {
+*/
+TF_LITE_MICRO_TEST(TestNoOverlapCase) {
   tflite::MicroErrorReporter micro_error_reporter;
 
-  tflite::GreedyMemoryPlanner planner(g_scratch_buffer, kScratchBufferSize);
+  tflite::TopologicalMemoryPlanner planner(g_scratch_buffer, kScratchBufferSize, 2);
+
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 100, 0, 1));
+                          planner.AddOperatorInfo(&micro_error_reporter, 0, 
+                                                tflite::BuiltinOperator_MUL, nullptr));                                              
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 50, 2, 3));
+                          planner.AddOperatorInfo(&micro_error_reporter, 1, 
+                                                tflite::BuiltinOperator_MUL, nullptr));                                              
+
+  bool input_of_operators_buffer0[3] = {1,0};                                              
+  bool output_of_operators_buffer0[3] = {0,0};             
+  bool input_of_operators_buffer1[3] = {0,1};                                              
+  bool output_of_operators_buffer1[3] = {1,0};        
+  bool input_of_operators_buffer2[3] = {0,0};                                              
+  bool output_of_operators_buffer2[3] = {0,1};    
+
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 20, 1, 2));
+                          planner.AddBuffer(&micro_error_reporter, 100, 0, 1,
+                                            input_of_operators_buffer0,
+                                            output_of_operators_buffer0));
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 50, 2, 3, 
+                                            input_of_operators_buffer1,
+                                            output_of_operators_buffer1));
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 20, 1, 2, 
+                                            input_of_operators_buffer2,
+                                            output_of_operators_buffer2));
 
   planner.PrintMemoryPlan();
 
@@ -425,13 +446,26 @@ TF_LITE_MICRO_TEST(TestOverlapCase) {
 TF_LITE_MICRO_TEST(TestSmallScratch) {
   tflite::MicroErrorReporter micro_error_reporter;
 
-  constexpr int scratch_buffer_size = 40;
+  constexpr int scratch_buffer_size = 200;
   unsigned char scratch_buffer[scratch_buffer_size];
-  tflite::GreedyMemoryPlanner planner(scratch_buffer, scratch_buffer_size);
+  tflite::TopologicalMemoryPlanner planner(scratch_buffer, scratch_buffer_size, 1);
   TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
-                          planner.AddBuffer(&micro_error_reporter, 100, 0, 1));
-  TF_LITE_MICRO_EXPECT_EQ(kTfLiteError,
-                          planner.AddBuffer(&micro_error_reporter, 50, 2, 3));
+                          planner.AddOperatorInfo(&micro_error_reporter, 0, 
+                                                tflite::BuiltinOperator_MUL, nullptr));                                                                                   
+
+  bool input_of_operators_buffer0[1] = {1};                                              
+  bool output_of_operators_buffer0[1] = {0};             
+  bool input_of_operators_buffer1[1] = {0};                                              
+  bool output_of_operators_buffer1[1] = {1};        
+
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 100, 0, 1,
+                                            input_of_operators_buffer0,
+                                            output_of_operators_buffer0));
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 50, 2, 3, 
+                                            input_of_operators_buffer1,
+                                            output_of_operators_buffer1));
 }
-*/
+
 TF_LITE_MICRO_TESTS_END
