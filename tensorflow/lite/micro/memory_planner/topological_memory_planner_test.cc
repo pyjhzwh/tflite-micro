@@ -402,6 +402,228 @@ TF_LITE_MICRO_TEST(TestPersonDetectionModel) {
                           planner.GetMaximumMemorySize());
 }
 */
+
+TF_LITE_MICRO_TEST(TestAllCNNNetModel) {
+  tflite::MicroErrorReporter micro_error_reporter;
+
+  // conv0 - conv8
+  tflite::TopologicalMemoryPlanner planner(g_scratch_buffer, kScratchBufferSize, 9);
+
+  tflite::ConvOpParams conv0Params = {/*.padding_type*/ tflite::PaddingType::kSame, 
+      /*padding_height*/ 1, /*padding_width*/ 1,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 1, /*stride_height*/ 1,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 32, /*input_width*/ 32,
+      /*input_channel*/ 3, /*filter_height*/ 3, /*filter_width*/ 3, /*output_height*/ 32,
+      /*output_width*/ 32, /*output_channel*/ 96};
+
+  tflite::ConvOpParams conv1Params = {/*.padding_type*/ tflite::PaddingType::kSame, 
+      /*padding_height*/ 1, /*padding_width*/ 1,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 1, /*stride_height*/ 1,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 32, /*input_width*/ 32,
+      /*input_channel*/ 96, /*filter_height*/ 3, /*filter_width*/ 3, /*output_height*/ 32,
+      /*output_width*/ 32, /*output_channel*/ 96};
+
+  tflite::ConvOpParams conv2Params = {/*.padding_type*/ tflite::PaddingType::kValid, 
+      /*padding_height*/ 1, /*padding_width*/ 1,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 2, /*stride_height*/ 2,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 32, /*input_width*/ 32,
+      /*input_channel*/ 96, /*filter_height*/ 3, /*filter_width*/ 3, /*output_height*/ 16,
+      /*output_width*/ 16, /*output_channel*/ 96};
+  
+  tflite::ConvOpParams conv3Params = {/*.padding_type*/ tflite::PaddingType::kSame, 
+      /*padding_height*/ 1, /*padding_width*/ 1,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 1, /*stride_height*/ 1,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 16, /*input_width*/ 16,
+      /*input_channel*/ 96, /*filter_height*/ 3, /*filter_width*/ 3, /*output_height*/ 16,
+      /*output_width*/ 16, /*output_channel*/ 192};
+
+  tflite::ConvOpParams conv4Params = {/*.padding_type*/ tflite::PaddingType::kSame, 
+      /*padding_height*/ 1, /*padding_width*/ 1,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 1, /*stride_height*/ 1,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 16, /*input_width*/ 16,
+      /*input_channel*/ 192, /*filter_height*/ 3, /*filter_width*/ 3, /*output_height*/ 16,
+      /*output_width*/ 16, /*output_channel*/ 192};
+  
+  tflite::ConvOpParams conv5Params = {/*.padding_type*/ tflite::PaddingType::kValid, 
+      /*padding_height*/ 1, /*padding_width*/ 1,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 2, /*stride_height*/ 2,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 16, /*input_width*/ 16,
+      /*input_channel*/ 192, /*filter_height*/ 3, /*filter_width*/ 3, /*output_height*/ 8,
+      /*output_width*/ 8, /*output_channel*/ 192};
+
+  tflite::ConvOpParams conv6Params = {/*.padding_type*/ tflite::PaddingType::kSame, 
+      /*padding_height*/ 1, /*padding_width*/ 1,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 1, /*stride_height*/ 1,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 8, /*input_width*/ 8,
+      /*input_channel*/ 192, /*filter_height*/ 3, /*filter_width*/ 3, /*output_height*/ 8,
+      /*output_width*/ 8, /*output_channel*/ 192};
+
+  tflite::ConvOpParams conv7Params = {/*.padding_type*/ tflite::PaddingType::kNone, 
+      /*padding_height*/ 0, /*padding_width*/ 0,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 1, /*stride_height*/ 1,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 8, /*input_width*/ 8,
+      /*input_channel*/ 192, /*filter_height*/ 1, /*filter_width*/ 1, /*output_height*/ 8,
+      /*output_width*/ 8, /*output_channel*/ 192};
+
+  tflite::ConvOpParams conv8Params = {/*.padding_type*/ tflite::PaddingType::kNone, 
+      /*padding_height*/ 0, /*padding_width*/ 0,
+      /*padding_height_offset*/ 0, /*padding_width_offset*/ 0, /*stride_width*/ 1, /*stride_height*/ 1,
+      /*dilation_width_factor*/ 1, /*dilation_height_factor*/ 1, /*input_height*/ 8, /*input_width*/ 8,
+      /*input_channel*/ 192, /*filter_height*/ 1, /*filter_width*/ 1, /*output_height*/ 8,
+      /*output_width*/ 8, /*output_channel*/ 10};
+
+  tflite::OpParams conv0;
+  tflite::OpParams conv1;
+  tflite::OpParams conv2;
+  tflite::OpParams conv3;
+  tflite::OpParams conv4;
+  tflite::OpParams conv5;
+  tflite::OpParams conv6;
+  tflite::OpParams conv7;
+  tflite::OpParams conv8;
+
+  conv0.convOpParams = conv0Params;
+  conv1.convOpParams = conv1Params;
+  conv2.convOpParams = conv2Params;
+  conv3.convOpParams = conv3Params;
+  conv4.convOpParams = conv4Params;
+  conv5.convOpParams = conv5Params;
+  conv6.convOpParams = conv6Params;
+  conv7.convOpParams = conv7Params;
+  conv8.convOpParams = conv8Params;
+  
+
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 0, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv0));
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 1, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv1));                                                
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 2, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv2));        
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 3, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv3));     
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 4, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv4));     
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 5, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv5));                                                                                         
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 6, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv6));     
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 7, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv7));   
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddOperatorInfo(&micro_error_reporter, 8, 
+                                                tflite::BuiltinOperator_CONV_2D, &conv8));      
+
+  // 9 layers, 10 buffers
+  bool input_of_operators[10][9] = {false};                                           
+  bool output_of_operators[10][9] = {false};     
+  input_of_operators[0][0] = true;
+  output_of_operators[9][8] = true;
+  for(int i=1; i <9; i++) {
+    input_of_operators[i][i] = true;
+    output_of_operators[i][i-1] = true;
+  }             
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv0Params.input_height * conv0Params.input_width *conv0Params.input_channel,
+                              0, 1, input_of_operators[0], output_of_operators[0]));                    
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv1Params.input_height * conv1Params.input_width *conv1Params.input_channel,
+                              1, 2, input_of_operators[1], output_of_operators[1]));                         
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv2Params.input_height * conv2Params.input_width *conv2Params.input_channel,
+                              2, 3, input_of_operators[2], output_of_operators[2]));                         
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv3Params.input_height * conv3Params.input_width *conv3Params.input_channel,
+                              3, 4, input_of_operators[3], output_of_operators[3]));                    
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv4Params.input_height * conv4Params.input_width *conv4Params.input_channel,
+                              4, 5, input_of_operators[4], output_of_operators[4]));                         
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv5Params.input_height * conv5Params.input_width *conv5Params.input_channel,
+                              5, 6, input_of_operators[5], output_of_operators[5]));                         
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv6Params.input_height * conv6Params.input_width *conv6Params.input_channel,
+                              6, 7, input_of_operators[6], output_of_operators[6]));                    
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv7Params.input_height * conv7Params.input_width *conv7Params.input_channel,
+                              7, 8, input_of_operators[7], output_of_operators[7]));                         
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv8Params.input_height * conv8Params.input_width *conv8Params.input_channel,
+                              8, 9, input_of_operators[8], output_of_operators[8]));                         
+
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk,
+                          planner.AddBuffer(&micro_error_reporter, 
+                              conv8Params.output_height * conv8Params.output_width *conv8Params.output_channel,
+                              9, 10, input_of_operators[9], output_of_operators[9]));
+
+  planner.PrintMemoryPlan();
+
+  TF_LITE_MICRO_EXPECT_EQ(true,
+                          planner.DoAnyBuffersOverlap(&micro_error_reporter));
+
+  int offset = -1;
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 0, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(0, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 1, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(102, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 2, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(3366, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 3, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(0, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 4, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(1728, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 5, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(5184, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 6, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(0, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 7, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(1920, offset);
+
+   TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 8, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(0, offset);
+
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, planner.GetOffsetForBuffer(&micro_error_reporter, 9, &offset));
+  TF_LITE_MICRO_EXPECT_EQ(11658, offset);
+
+ 
+ 
+  // The results in self_convolution_mem.py is 101670 B
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(101670),
+                          planner.GetMaximumMemorySize());                            
+}
 TF_LITE_MICRO_TEST(TestNoOverlapCase) {
   tflite::MicroErrorReporter micro_error_reporter;
 
