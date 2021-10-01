@@ -138,7 +138,8 @@ CC_WARNINGS := \
   -Wextra \
   -Wstrict-aliasing \
   -Wno-unused-parameter \
-  -Wno-strict-overflow
+  -Wno-strict-overflow \
+  -Wno-unused-function
 
 COMMON_FLAGS := \
   -Werror \
@@ -270,6 +271,7 @@ tensorflow/lite/micro/flatbuffer_utils_test.cc \
 tensorflow/lite/micro/memory_arena_threshold_test.cc \
 tensorflow/lite/micro/memory_helpers_test.cc \
 tensorflow/lite/micro/micro_allocator_test.cc \
+tensorflow/lite/micro/micro_allocator_topological_test.cc \
 tensorflow/lite/micro/micro_error_reporter_test.cc \
 tensorflow/lite/micro/micro_interpreter_test.cc \
 tensorflow/lite/micro/micro_mutable_op_resolver_test.cc \

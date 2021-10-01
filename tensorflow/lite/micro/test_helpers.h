@@ -95,6 +95,10 @@ AllOpsResolver GetOpResolver();
 // 1 layer of weights, 1 output Tensor, and 1 operator.
 const Model* GetSimpleMockModel();
 
+// Returns a simple example flatbuffer TensorFlow Lite model. Contains 1 input,
+// 1 layer of weights, 1 output Tensor, and 1 operator (conv2d).
+const Model* GetSimpleMockConvModel();
+
 // Returns a flatbuffer TensorFlow Lite model with more inputs, variable
 // tensors, and operators.
 const Model* GetComplexMockModel();

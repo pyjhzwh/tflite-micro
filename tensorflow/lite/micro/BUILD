@@ -376,6 +376,22 @@ cc_test(
 )
 
 cc_test(
+    name = "micro_allocator_topological_test",
+    srcs = [
+        "micro_allocator_topological_test.cc",
+    ],
+    deps = [
+        ":memory_helpers",
+        ":micro_allocator",
+        ":micro_error_reporter",
+        ":test_helpers",
+        "//tensorflow/lite/c:common",
+        "//tensorflow/lite/micro/testing:micro_test",
+        "//tensorflow/lite/micro/testing:test_conv_model",
+    ],
+)
+
+cc_test(
     name = "recording_micro_allocator_test",
     srcs = [
         "recording_micro_allocator_test.cc",

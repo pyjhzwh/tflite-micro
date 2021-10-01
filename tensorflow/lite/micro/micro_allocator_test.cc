@@ -108,6 +108,77 @@ void VerifyMockWeightTensor(const Model* model, MicroAllocator* allocator,
   }
 }
 
+void VerifyMockConvTfLiteTensor(TfLiteTensor* tensor, bool is_variable = false) {
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteInt32, tensor->type);
+  TF_LITE_MICRO_EXPECT_EQ(4, tensor->dims->size);
+  TF_LITE_MICRO_EXPECT_EQ(1, tensor->dims->data[0]);
+  TF_LITE_MICRO_EXPECT_EQ(is_variable, tensor->is_variable);
+  //TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(4), tensor->bytes);
+  TF_LITE_MICRO_EXPECT_NE(nullptr, tensor->data.raw);
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(0),
+                          (reinterpret_cast<std::uintptr_t>(tensor->data.raw) %
+                           kExpectedAlignment));
+}
+
+void VerifyMockConvWeightTfLiteTensor(TfLiteTensor* tensor) {
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteUInt8, tensor->type);
+  TF_LITE_MICRO_EXPECT_EQ(4, tensor->dims->size);
+  TF_LITE_MICRO_EXPECT_EQ(5, tensor->dims->data[0]);
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(5*3*3*3), tensor->bytes);
+  TF_LITE_MICRO_EXPECT_NE(nullptr, tensor->data.raw);
+}
+
+void VerifyMockConvTfLiteEvalTensor(TfLiteEvalTensor* tensor) {
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteInt32, tensor->type);
+  TF_LITE_MICRO_EXPECT_EQ(4, tensor->dims->size);
+  TF_LITE_MICRO_EXPECT_EQ(1, tensor->dims->data[0]);
+  size_t buffer_size;
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, tflite::TfLiteEvalTensorByteLength(tensor, &buffer_size));
+  //TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(4), buffer_size);
+  TF_LITE_MICRO_EXPECT_NE(nullptr, tensor->data.raw);
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(0),
+                          (reinterpret_cast<std::uintptr_t>(tensor->data.raw) %
+                           kExpectedAlignment));
+}
+
+void VerifyMockConvWeightTfLiteEvalTensor(TfLiteEvalTensor* tensor) {
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteUInt8, tensor->type);
+  TF_LITE_MICRO_EXPECT_EQ(4, tensor->dims->size);
+  TF_LITE_MICRO_EXPECT_EQ(5, tensor->dims->data[0]);
+  size_t buffer_size;
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, tflite::TfLiteEvalTensorByteLength(tensor, &buffer_size));
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(5*3*3*3), buffer_size);
+  TF_LITE_MICRO_EXPECT_NE(nullptr, tensor->data.raw);
+}
+
+void VerifyMockConvTensor(const Model* model, MicroAllocator* allocator,
+                      SubgraphAllocations* subgraph_allocations, int tensor_idx,
+                      bool is_variable = false) {
+  for (size_t subgraph_idx = 0; subgraph_idx < model->subgraphs()->size();
+       subgraph_idx++) {
+    VerifyMockConvTfLiteTensor(
+        allocator->AllocatePersistentTfLiteTensor(model, subgraph_allocations,
+                                                  tensor_idx, subgraph_idx),
+        is_variable);
+    VerifyMockConvTfLiteEvalTensor(
+        &subgraph_allocations[subgraph_idx].tensors[tensor_idx]);
+  }
+}
+
+void VerifyMockConvWeightTensor(const Model* model, MicroAllocator* allocator,
+                            SubgraphAllocations* subgraph_allocations,
+                            int tensor_idx) {
+  for (size_t subgraph_idx = 0; subgraph_idx < model->subgraphs()->size();
+       subgraph_idx++) {
+    VerifyMockConvWeightTfLiteTensor(allocator->AllocatePersistentTfLiteTensor(
+        model, subgraph_allocations, tensor_idx, subgraph_idx));
+    VerifyMockConvWeightTfLiteEvalTensor(
+        &subgraph_allocations[subgraph_idx].tensors[tensor_idx]);
+  }
+}
+
 void EnsureUniqueVariableTensorBuffer(const Model* model,
                                       TfLiteEvalTensor* eval_tensors,
                                       const int variable_tensor_idx) {
@@ -320,7 +391,46 @@ TF_LITE_MICRO_TEST(TestMockModelAllocation) {
                                                        /*count=*/2,
                                                        /*num_subgraphs=*/1);
 }
+#define TOPOLOGY_MEM_PLANNER
+#define TF_LITE_SHOW_MEMORY_USE
+TF_LITE_MICRO_TEST(TestMockConvModelAllocation) {
+  const tflite::Model* model = tflite::testing::GetSimpleMockConvModel();
+  tflite::ScratchBufferHandle* scratch_buffer_handles = nullptr;
+  tflite::AllOpsResolver op_resolver = tflite::testing::GetOpResolver();
+  constexpr size_t arena_size = 1024;
+  uint8_t arena[arena_size];
+  tflite::MicroAllocator* allocator = tflite::MicroAllocator::Create(
+      arena, arena_size, tflite::GetMicroErrorReporter());
+  TF_LITE_MICRO_EXPECT(nullptr != allocator);
+  tflite::SubgraphAllocations* subgraph_allocations =
+      allocator->StartModelAllocation(model);
+  TF_LITE_MICRO_EXPECT(nullptr != subgraph_allocations);
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, allocator->FinishModelAllocation(model, subgraph_allocations,
+                                                  &scratch_buffer_handles));
 
+  size_t model_tensor_size = tflite::testing::GetModelTensorCount(model);
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(3), model_tensor_size);
+
+  tflite::testing::VerifyMockConvTensor(model, allocator, subgraph_allocations, 0);
+  tflite::testing::VerifyMockConvWeightTensor(model, allocator,
+                                          subgraph_allocations, 1);
+  tflite::testing::VerifyMockConvTensor(model, allocator, subgraph_allocations, 2);
+
+  TfLiteEvalTensor* eval_tensors = subgraph_allocations[0].tensors;
+  TF_LITE_MICRO_EXPECT_NE(eval_tensors[1].data.raw, eval_tensors[0].data.raw);
+  TF_LITE_MICRO_EXPECT_NE(eval_tensors[2].data.raw, eval_tensors[0].data.raw);
+  TF_LITE_MICRO_EXPECT_NE(eval_tensors[1].data.raw, eval_tensors[2].data.raw);
+
+  TF_LITE_MICRO_EXPECT_LT(static_cast<int>(allocator->used_bytes()), 776 + 100); // TODO: size should be
+
+  // SimpleMockModel has 2 operators:
+  tflite::testing::VerifyRegistrationAndNodeAllocation(subgraph_allocations,
+                                                       /*count=*/1,
+                                                       /*num_subgraphs=*/1);
+}
+#undef TOPOLOGY_MEM_PLANNER
+#undef TF_LITE_SHOW_MEMORY_USE
 TF_LITE_MICRO_TEST(TestMultiTenantAllocation) {
   // The `OpResolver` is shared among different models in this test for
   // simplicity but in practice you could have different `OpResolver`.

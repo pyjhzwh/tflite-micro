@@ -34,7 +34,7 @@ limitations under the License.
 #include "tensorflow/lite/micro/simple_memory_allocator.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/schema/schema_utils.h"
-
+#define TOPOLOGY_MEM_PLANNER
 namespace tflite {
 
 namespace {
@@ -60,7 +60,7 @@ struct AllocationInfo {
   // 1 means the tensor is one of inputs of the corresponding index of operator
   bool* input_of_operators;
   // boolean array of operators of which tensor is the output
-  bool* output_of_oeprators;
+  bool* output_of_operators;
 };
 
 // Used to hold information of operations;
@@ -70,6 +70,16 @@ struct OperatorInfo {
 #endif
 };
 
+// Converts the flatbuffer padding enum to what is used at runtime.
+PaddingType ConvertPadding(Padding padding) {
+  switch (padding) {
+    case Padding_SAME:
+      return PaddingType::kSame;
+    case Padding_VALID:
+      return PaddingType::kValid;
+  }
+  return PaddingType::kNone;
+}
 
 // We align tensor buffers to 16-byte boundaries, since this is a common
 // requirement for SIMD extensions.
@@ -168,9 +178,16 @@ TfLiteStatus CheckOfflinePlannedOffsets(const Model* model,
 // plan. Methods need to be called in order from `Init`, `Add*`, to `Finish`.
 class AllocationInfoBuilder {
  public:
-  AllocationInfoBuilder(AllocationInfo* info, size_t tensor_count,
+  AllocationInfoBuilder(AllocationInfo* info, 
+#ifdef TOPOLOGY_MEM_PLANNER
+  OperatorInfo* operator_info,
+#endif
+  size_t tensor_count,
                         size_t scratch_buffer_count, ErrorReporter* reporter)
       : info_(info),
+#ifdef TOPOLOGY_MEM_PLANNER
+        operator_info_(operator_info),
+#endif
         tensor_count_(tensor_count),
         buffer_count_(scratch_buffer_count),
         reporter_(reporter) {}
@@ -200,6 +217,9 @@ class AllocationInfoBuilder {
 
  private:
   AllocationInfo* info_ = nullptr;
+#ifdef TOPOLOGY_MEM_PLANNER
+  OperatorInfo* operator_info_=nullptr;
+#endif
   size_t tensor_count_ = 0;
   size_t buffer_count_ = 0;
   ErrorReporter* reporter_ = nullptr;
@@ -214,7 +234,7 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
   TFLITE_DCHECK(eval_tensors != nullptr);
 
 #ifdef TOPOLOGY_MEM_PLANNER
-  auto* opcodes = model_->operator_codes();
+  auto* opcodes = model->operator_codes();
 #endif
 
   // Set up allocation info for all tensors.
@@ -255,13 +275,13 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
   for (int i = (operators_size - 1); i >= 0; --i) {
     const auto* op = subgraph->operators()->Get(i);
 #ifdef TOPOLOGY_MEM_PLANNER 
-    TfLiteNode* node = &(
-          graph_.GetAllocations()[subgraph_idx].node_and_registrations[i].node);
+    //TfLiteNode* node = &(
+    //      graph_.GetAllocations()[subgraph_idx].node_and_registrations[i].node);
     OperatorInfo* current_op_info = &(operator_info_[i]);
-    switch(EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index))) {
+    switch(BuiltinOperator(op->opcode_index())) {
       case BuiltinOperator_CONV_2D: {
         ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
-        current_op_info->op_type = GetBuiltinCode(opcodes->Get(op->opcode_index));
+        current_op_info->op_type = GetBuiltinCode(opcodes->Get(op->opcode_index()));
         // input and filter
         TFLITE_DCHECK_EQ(op->inputs()->size(), 2);
         // 1 output
@@ -270,14 +290,14 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
         // reference: flatbuffer_conversion.cc line1092
         const Conv2DOptions* schema_params = op->builtin_options_as_Conv2DOptions();
         if (schema_params != nullptr) {
-          current_op_info->padding_type = ConvertPadding(schema_params->padding());
-          current_op_info->stride_width = schema_params->stride_w();
-          current_op_info->stride_height = schema_params->stride_h();
-          //current_op_info->activation =
+          current_op_params->padding_type = ConvertPadding(schema_params->padding());
+          current_op_params->stride_width = schema_params->stride_w();
+          current_op_params->stride_height = schema_params->stride_h();
+          //current_op_params->activation =
           //    ConvertActivation(schema_params->fused_activation_function());
 
-          current_op_info->dilation_width_factor = schema_params->dilation_w_factor();
-          current_op_info->dilation_height_factor = schema_params->dilation_h_factor();
+          current_op_params->dilation_width_factor = schema_params->dilation_w_factor();
+          current_op_params->dilation_height_factor = schema_params->dilation_h_factor();
         }
         else {
           return kTfLiteError;
@@ -296,8 +316,9 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
       }
 #ifdef TOPOLOGY_MEM_PLANNER 
     current->input_of_operators[i] = 1;
-    switch(EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index))) {
+    switch(BuiltinOperator(op->opcode_index())) {
       case BuiltinOperator_CONV_2D: {
+        ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
         // input
         if (current->needs_allocating) {
             TfLiteEvalTensor* input_tensor = &(eval_tensors[tensor_index]);
@@ -328,9 +349,10 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
         current->first_created = i;
       }
 #ifdef TOPOLOGY_MEM_PLANNER 
-    current->output_of_oeprators[i] = 1;
-    switch(EnumNameBuiltinOperator(BuiltinOperator(op->opcode_index))) {
+    current->output_of_operators[i] = 1;
+    switch(BuiltinOperator(op->opcode_index())) {
       case BuiltinOperator_CONV_2D: {
+        ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
         TfLiteEvalTensor* output_tensor = &(eval_tensors[tensor_index]);
         TFLITE_DCHECK_EQ(output_tensor->dims->size, 4);
         current_op_params->output_height = output_tensor->dims->data[1];
@@ -339,16 +361,16 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
         // compute padding now
         // reference tensorflow/lite/kernels/padding.h: line 32
         int offset = 0;
-        current_op_info->padding_height =
+        current_op_params->padding_height =
             ComputePaddingWithOffset(current_op_params->stride_height, 
-                current_op_info->dilation_height_factor, current_op_params->input_height,
-                current_op_params->fileter_height, current_op_params->output_height, &offset);
-        current_op_info->padding_height_offset = offset;
-        current_op_info->padding_width =
+                current_op_params->dilation_height_factor, current_op_params->input_height,
+                current_op_params->filter_height, current_op_params->output_height, &offset);
+                current_op_params->padding_height_offset = offset;
+                current_op_params->padding_width =
             ComputePaddingWithOffset(current_op_params->stride_width, 
-                current_op_info->dilation_width_factor, current_op_params->input_width,
-                current_op_params->fileter_width, current_op_params->output_height, &offset);
-        current_op_info->padding_width_offset = offset;
+                current_op_params->dilation_width_factor, current_op_params->input_width,
+                current_op_params->filter_width, current_op_params->output_height, &offset);
+                current_op_params->padding_width_offset = offset;
         
         break;
       }
@@ -457,13 +479,12 @@ TfLiteStatus CreatePlanTopological(ErrorReporter* error_reporter,
             planner->AddBuffer(error_reporter, aligned_bytes_required,
                                current->first_created, current->last_used,
                                current->input_of_operators,
-                               current->output_of_operators, 
-                               operator_info_size));
+                               current->output_of_operators));
       } else {
         TF_LITE_ENSURE_STATUS(planner->AddBuffer(
             error_reporter, aligned_bytes_required, current->first_created,
-            current->last_used, current->offline_offset,
-            current->input_of_operators, current->output_of_operators));
+            current->last_used,current->input_of_operators, current->output_of_operators, 
+            current->offline_offset));
       }
     }
   }
@@ -474,7 +495,7 @@ TfLiteStatus CreatePlanTopological(ErrorReporter* error_reporter,
     // Like Conv, Add, DepthConv, etc.?
     if (1) {
       TF_LITE_ENSURE_STATUS(
-          planner->AddOperatorInfo(error_reporter, i, current->opcode, current->params);
+          planner->AddOperatorInfo(error_reporter, i, current->op_type, reinterpret_cast<OpParams*>(current->params)));
     }
   }
   return kTfLiteOk;
@@ -1113,11 +1134,11 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
 #ifdef TOPOLOGY_MEM_PLANNER
   size_t operator_info_count = subgraph->operators()->size() ;
 
-  for (int i=0; i < allocation_info_count; ++i) {
-    allocation_info[i]->input_of_operators = 
-      memory_allocator_->AllocateTemp(sizeof(bool) * operator_info_count, sizeof(bool));
-    allocation_info[i]->output_of_operators = 
-      memory_allocator_->AllocateTemp(sizeof(bool) * operator_info_count, sizeof(bool));
+  for (size_t i=0; i < allocation_info_count; ++i) {
+    allocation_info[i].input_of_operators = reinterpret_cast<bool*>(
+        memory_allocator_->AllocateTemp(sizeof(bool) * operator_info_count, sizeof(bool)));
+    allocation_info[i].output_of_operators = reinterpret_cast<bool*>(
+        memory_allocator_->AllocateTemp(sizeof(bool) * operator_info_count, sizeof(bool)));
   }
 
   size_t operators_bytes = sizeof(OperatorInfo) * operator_info_count;
@@ -1136,8 +1157,8 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
   // TODO: operator_info_params_bytes = maximum of all posible OpParams struct sizes
   // Currently only ConvOpParams
   size_t operator_info_params_bytes = sizeof(ConvOpParams);
-  for (int i=0; i < operator_info_count; ++i) {
-    operator_info[i]->params = 
+  for (size_t i=0; i < operator_info_count; ++i) {
+    operator_info[i].params = 
         memory_allocator_->AllocateTemp(operator_info_params_bytes, 
                                         alignof(operator_info_params_bytes));
   }
@@ -1145,7 +1166,11 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
 
   // Use the AllocationInfoBuilder class to help determine where buffers are
   // used in the subgraph.
-  AllocationInfoBuilder builder(allocation_info, subgraph->tensors()->size(),
+  AllocationInfoBuilder builder(allocation_info, 
+#ifdef TOPOLOGY_MEM_PLANNER
+  operator_info,
+#endif
+  subgraph->tensors()->size(),
                                 scratch_buffer_request_count_, error_reporter_);
 
   const int32_t* offline_planner_offsets = nullptr;
@@ -1170,9 +1195,16 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
   uint8_t* planner_arena =
       memory_allocator_->AllocateTemp(remaining_arena_size, kBufferAlignment);
   TF_LITE_ENSURE(error_reporter_, planner_arena != nullptr);
+#ifndef TOPOLOGY_MEM_PLANNER
   GreedyMemoryPlanner planner(planner_arena, remaining_arena_size);
   TF_LITE_ENSURE_STATUS(CreatePlan(error_reporter_, &planner, allocation_info,
                                    allocation_info_count));
+#else 
+  TopologicalMemoryPlanner planner(planner_arena, remaining_arena_size, operator_info_count);
+  TF_LITE_ENSURE_STATUS(CreatePlanTopological(error_reporter_, &planner, allocation_info,
+                                   allocation_info_count, operator_info, operator_info_count));
+#endif
+  
 
   // Reset all temp allocations used above:
   memory_allocator_->ResetTempAllocations();
@@ -1197,7 +1229,7 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
   planner.PrintMemoryPlan();
 #endif
   head_usage = planner.GetMaximumMemorySize();
-
+  printf("planner memory usage: %zu\n", head_usage);
   // The head is used to store memory plans for one model at a time during the
   // model preparation stage, and is re-purposed to store scratch buffer handles
   // during model invocation. The head must be as large as the greater of the

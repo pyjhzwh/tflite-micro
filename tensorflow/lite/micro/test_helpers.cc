@@ -854,7 +854,7 @@ const Model* BuildSimpleMockConvModel() {
                    TensorType_UINT8, 1,
                    builder->CreateString("test_weight_tensor"), 0, false),
       CreateTensor(*builder,
-                   builder->CreateVector(tensor1_shape, tensor_shape_size),
+                   builder->CreateVector(tensor2_shape, tensor_shape_size),
                    TensorType_INT32, 0,
                    builder->CreateString("test_output_tensor"), 0, false),
   };
@@ -867,19 +867,21 @@ const Model* BuildSimpleMockConvModel() {
   constexpr size_t operator_outputs_size = 1;
   const int32_t operator_outputs[operator_outputs_size] = {2};
   constexpr size_t operators_size = 1;
+  /*
   const tflite::Conv2DOptions convOptions;
   convOptions.padding = tflite::Padding::Padding_SAME;
   convOptions.stride_h = 1;
   convOptions.stride_w = 1;
   convOptions.dilation_h_factor = 1;
   convOptions.dilation_w_factor = 1;
+  */
   const Offset<Operator> operators[operators_size] = {
       CreateOperator(
           *builder, 0,
           builder->CreateVector(operator_inputs, operator_inputs_size),
           builder->CreateVector(operator_outputs, operator_outputs_size),
-          BuiltinOptions_Conv2DOptions),
-          convOptions,
+          BuiltinOptions_Conv2DOptions,
+          CreateConv2DOptions(*builder, tflite::Padding_SAME, 1, 1).Union()),
   };
   constexpr size_t subgraphs_size = 1;
   const Offset<SubGraph> subgraphs[subgraphs_size] = {
