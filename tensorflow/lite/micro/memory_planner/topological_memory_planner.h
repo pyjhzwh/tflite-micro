@@ -21,6 +21,7 @@ limitations under the License.
 #include "tensorflow/lite/micro/memory_planner/memory_planner.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/kernels/internal/types.h"
+#include "tensorflow/lite/micro/memory_helpers.h"
 
 namespace tflite {
 
@@ -203,7 +204,7 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   
   // The number of operators in graph
   int operators_size_;
-  
+  const int kBufferAlignment = 16;
 
   TF_LITE_REMOVE_VIRTUAL_DELETE
 };

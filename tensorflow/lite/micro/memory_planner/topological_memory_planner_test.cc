@@ -200,7 +200,7 @@ TF_LITE_MICRO_TEST(TestTopologicalBasicsConv) {
   TF_LITE_MICRO_EXPECT_EQ(true,
                           planner.DoAnyBuffersOverlap(&micro_error_reporter));
 
-  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(60),
+  TF_LITE_MICRO_EXPECT_EQ(static_cast<size_t>(16+45),
                           planner.GetMaximumMemorySize());
 
   int offset = -1;

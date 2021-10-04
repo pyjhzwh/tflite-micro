@@ -90,6 +90,13 @@ void SortInPlace2Level(int* val1s, int* val2s, int* ids, int size) {
   } while (any_swapped);
 }
 
+int InputSizeConv2D(ConvOpParams* op_params) {
+  return op_params->input_height * op_params->input_width * op_params->input_channel;
+}
+
+int OutputSizeConv2D(ConvOpParams* op_params) {
+  return op_params->output_height * op_params->output_width * op_params->output_channel;
+}
 
 // if we need forward physically padding input tensor, how many bytes needed
 int CalForwardConv2DMemPaddingLen(ConvOpParams* op_params) {
@@ -109,8 +116,10 @@ int CalForwardConv2DMemPaddingLen(ConvOpParams* op_params) {
     }
   }
 
-  return curend - op_params->input_height * op_params->input_width * op_params->input_channel;
+  return curend - InputSizeConv2D(op_params);
 }
+
+
 
 
 bool IsOverlapOrInplaceOperator( BuiltinOperator op_type) {
@@ -124,7 +133,8 @@ TopologicalMemoryPlanner::TopologicalMemoryPlanner(unsigned char* scratch_buffer
                                          int scratch_buffer_size, int operator_size)
     : buffer_count_(0), need_to_calculate_offsets_(true) {
   // Allocate the arrays we need within the scratch buffer arena.
-  max_buffer_count_ = (scratch_buffer_size - sizeof(OperatorRequirements) * operator_size) / per_buffer_size();
+  max_buffer_count_ = (scratch_buffer_size - sizeof(OperatorRequirements) * operator_size) / \
+      (per_buffer_size() + 2 *operator_size);
   operators_size_ = operator_size;
 
   unsigned char* next_free = scratch_buffer;
@@ -294,7 +304,8 @@ int TopologicalMemoryPlanner::CalculatePaddingLen(OperatorRequirements* op_requi
     // if not residual layer
     if (prior_requirements->last_time_used == current_requirements->first_time_used) {
       return CalForwardConv2DMemPaddingLen(&(op_requirements->params.convOpParams)) + \
-        prior_requirements->size - current_requirements->size;
+        InputSizeConv2D(&(op_requirements->params.convOpParams)) - \
+        OutputSizeConv2D(&(op_requirements->params.convOpParams));
     }
   }
   // if node is in-place operation
@@ -436,8 +447,10 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
           // considering overlaps
           const int prior_entry_offset = CalCurrentOffset(prior_entry,
             candidate_requirements, wanted_requirements);
-          if (prior_entry_offset > candidate_offset) {
-            candidate_offset = prior_entry_offset;
+          int aligned_prior_entry_offset = 
+              AlignSizeUp(prior_entry_offset, kBufferAlignment);
+          if (aligned_prior_entry_offset > candidate_offset) {
+            candidate_offset = aligned_prior_entry_offset;
           }
         }
         if (next_entry == nullptr) {
@@ -448,6 +461,7 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
         // Find out how much space there is between us and the next buffer.
         const int gap = next_entry->offset - candidate_offset;
         int wanted_gap = CalWantedGap(next_entry, wanted_requirements, wanted_size);
+        wanted_gap = AlignSizeUp(wanted_gap, kBufferAlignment);
         if (gap >= wanted_gap) {
           // This entry has a big enough gap between it and the next, so
           // use it!

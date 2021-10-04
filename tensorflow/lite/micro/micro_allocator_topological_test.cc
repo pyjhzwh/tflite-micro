@@ -24,7 +24,6 @@ limitations under the License.
 #include "tensorflow/lite/micro/test_helpers.h"
 #include "tensorflow/lite/micro/testing/micro_test.h"
 #include "tensorflow/lite/micro/testing/test_conv_model.h"
-
 #define TOPOLOGY_MEM_PLANNER
 #define TF_LITE_SHOW_MEMORY_USE
 
@@ -41,7 +40,7 @@ constexpr int t4 = 4;
 constexpr int t5 = 5;
 
 void VerifyMockConvTfLiteTensor(TfLiteTensor* tensor, bool is_variable = false) {
-  TF_LITE_MICRO_EXPECT_EQ(kTfLiteInt32, tensor->type);
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteInt8, tensor->type);
   TF_LITE_MICRO_EXPECT_EQ(4, tensor->dims->size);
   TF_LITE_MICRO_EXPECT_EQ(1, tensor->dims->data[0]);
   TF_LITE_MICRO_EXPECT_EQ(is_variable, tensor->is_variable);
@@ -61,7 +60,7 @@ void VerifyMockConvWeightTfLiteTensor(TfLiteTensor* tensor) {
 }
 
 void VerifyMockConvTfLiteEvalTensor(TfLiteEvalTensor* tensor) {
-  TF_LITE_MICRO_EXPECT_EQ(kTfLiteInt32, tensor->type);
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteInt8, tensor->type);
   TF_LITE_MICRO_EXPECT_EQ(4, tensor->dims->size);
   TF_LITE_MICRO_EXPECT_EQ(1, tensor->dims->data[0]);
   size_t buffer_size;

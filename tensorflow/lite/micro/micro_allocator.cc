@@ -261,7 +261,7 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
   for (size_t i = 0; i < subgraph->inputs()->size(); ++i) {
     const int tensor_index = subgraph->inputs()->Get(i);
     AllocationInfo* current = &info_[tensor_index];
-    current->first_created = 0;
+    current->first_created = -1;//0;
   }
 
   // Mark all outputs as persistent to the end of the invocation.
@@ -278,10 +278,11 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
     //TfLiteNode* node = &(
     //      graph_.GetAllocations()[subgraph_idx].node_and_registrations[i].node);
     OperatorInfo* current_op_info = &(operator_info_[i]);
-    switch(BuiltinOperator(op->opcode_index())) {
+    BuiltinOperator op_type = GetBuiltinCode(opcodes->Get(op->opcode_index()));
+    switch(BuiltinOperator(op_type)) {
       case BuiltinOperator_CONV_2D: {
         ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
-        current_op_info->op_type = GetBuiltinCode(opcodes->Get(op->opcode_index()));
+        current_op_info->op_type = op_type;
         // input and filter
         TFLITE_DCHECK_EQ(op->inputs()->size(), 2);
         // 1 output
@@ -316,7 +317,7 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
       }
 #ifdef TOPOLOGY_MEM_PLANNER 
     current->input_of_operators[i] = 1;
-    switch(BuiltinOperator(op->opcode_index())) {
+    switch(BuiltinOperator(op_type)) {
       case BuiltinOperator_CONV_2D: {
         ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
         // input
@@ -350,7 +351,7 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
       }
 #ifdef TOPOLOGY_MEM_PLANNER 
     current->output_of_operators[i] = 1;
-    switch(BuiltinOperator(op->opcode_index())) {
+    switch(BuiltinOperator(op_type)) {
       case BuiltinOperator_CONV_2D: {
         ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
         TfLiteEvalTensor* output_tensor = &(eval_tensors[tensor_index]);

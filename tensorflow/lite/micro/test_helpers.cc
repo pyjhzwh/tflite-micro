@@ -831,8 +831,8 @@ const Model* BuildSimpleMockConvModel() {
   using flatbuffers::Offset;
   flatbuffers::FlatBufferBuilder* builder = BuilderInstance();
 
-  constexpr size_t buffer_data_size = 1;
-  const uint8_t buffer_data[buffer_data_size] = {21};
+  constexpr size_t buffer_data_size = 5*3*3*3;
+  const uint8_t buffer_data[buffer_data_size] = {1};
   constexpr size_t buffers_size = 2;
   // TODO: what is this???
   const Offset<Buffer> buffers[buffers_size] = {
@@ -847,7 +847,7 @@ const Model* BuildSimpleMockConvModel() {
   const Offset<Tensor> tensors[tensors_size] = {
       CreateTensor(*builder,
                    builder->CreateVector(tensor0_shape, tensor_shape_size),
-                   TensorType_INT32, 0,
+                   TensorType_INT8, 0,
                    builder->CreateString("test_input_tensor"), 0, false),
       CreateTensor(*builder,
                    builder->CreateVector(tensor1_shape, tensor_shape_size),
@@ -855,7 +855,7 @@ const Model* BuildSimpleMockConvModel() {
                    builder->CreateString("test_weight_tensor"), 0, false),
       CreateTensor(*builder,
                    builder->CreateVector(tensor2_shape, tensor_shape_size),
-                   TensorType_INT32, 0,
+                   TensorType_INT8, 0,
                    builder->CreateString("test_output_tensor"), 0, false),
   };
   constexpr size_t inputs_size = 1;
@@ -863,7 +863,7 @@ const Model* BuildSimpleMockConvModel() {
   constexpr size_t outputs_size = 1;
   const int32_t outputs[outputs_size] = {2};
   constexpr size_t operator_inputs_size = 2;
-  const int32_t operator_inputs[operator_inputs_size] = {0};
+  const int32_t operator_inputs[operator_inputs_size] = {0, 1};
   constexpr size_t operator_outputs_size = 1;
   const int32_t operator_outputs[operator_outputs_size] = {2};
   constexpr size_t operators_size = 1;
