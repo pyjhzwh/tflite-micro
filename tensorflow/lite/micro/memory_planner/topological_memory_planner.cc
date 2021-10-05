@@ -124,7 +124,7 @@ int CalForwardConv2DMemPaddingLen(ConvOpParams* op_params) {
 
 bool IsOverlapOrInplaceOperator( BuiltinOperator op_type) {
   // TODO: add more op_type later
-  if( (op_type == BuiltinOperator_CONV_2D) || (op_type == BuiltinOperator_ADD))
+  if( (op_type == BuiltinOperator_CONV_2D) )// || (op_type == BuiltinOperator_ADD))
     return true;
   return false;
 }
@@ -243,7 +243,7 @@ TfLiteStatus TopologicalMemoryPlanner::AddBuffer(
     int offline_offset) {
   BufferRequirements* current = &requirements_[buffer_count_];
   if (AddBuffer(error_reporter, size, first_time_used, last_time_used, 
-      input_of_operators, output_of_operators, operators_size_) !=
+      input_of_operators, output_of_operators) !=
       kTfLiteOk) {
     return kTfLiteError;
   }
@@ -367,7 +367,7 @@ int TopologicalMemoryPlanner::CalWantedGap(ListEntry* next_entry,
               if (op_type == BuiltinOperator_CONV_2D)
                 return CalForwardConv2DMemPaddingLen(&(ops_requirements_[i].params.convOpParams));
               else
-                return 0;
+                return wanted_size;
         }
       }
     }
@@ -427,6 +427,12 @@ void TopologicalMemoryPlanner::CalculateOffsetsIfNeeded() {
     const int wanted_size = wanted_requirements->size;
     const int wanted_first_time_used = wanted_requirements->first_time_used;
     const int wanted_last_time_used = wanted_requirements->last_time_used;
+
+    // unused tensor, do not need to allocate memory
+    if (wanted_last_time_used == -1) {
+      buffer_offsets_[buffer_id] = 0;
+      continue;
+    }
 
     int candidate_offset = 0;
     // Loop through the offset-ordered list of buffer chunks
