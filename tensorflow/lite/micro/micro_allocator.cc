@@ -827,6 +827,7 @@ TfLiteStatus MicroAllocator::FinishModelAllocation(
         scratch_buffer_handles, scratch_buffer_request_count_));
     TF_LITE_ENSURE_STATUS(CommitStaticMemoryPlan(
         model, subgraph_allocations[subgraph_idx].tensors,
+        subgraph_allocations[subgraph_idx].node_and_registrations,
         *scratch_buffer_handles, subgraph_idx));
     TF_LITE_ENSURE_STATUS(AllocateVariables(
         subgraph, subgraph_allocations[subgraph_idx].tensors));
@@ -1103,6 +1104,7 @@ ErrorReporter* MicroAllocator::error_reporter() const {
 
 TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
     const Model* model, TfLiteEvalTensor* eval_tensors,
+    NodeAndRegistration* node_and_registrations,
     ScratchBufferHandle* scratch_buffer_handles, int subgraph_idx) {
   size_t head_usage = 0;
   // Create static memory plan
@@ -1228,6 +1230,14 @@ TfLiteStatus MicroAllocator::CommitStaticMemoryPlan(
                                    allocation_info, allocation_info_count));
 #ifdef TF_LITE_SHOW_MEMORY_USE
   planner.PrintMemoryPlan();
+#endif
+
+#ifdef TOPOLOGY_MEM_PLANNER
+  // update node->reverse after Topological memory allocator
+  for(size_t i=0; i < operator_info_count; i++) {
+    TfLiteNode* node = &(node_and_registrations[i].node);
+    node->reverse = planner.GetOperatorRequirementsReverse(error_reporter_, i);
+  }
 #endif
   head_usage = planner.GetMaximumMemorySize();
   printf("planner memory usage: %zu\n", head_usage);

@@ -665,4 +665,14 @@ bool TopologicalMemoryPlanner::DoAnyBuffersOverlap(ErrorReporter* error_reporter
   return were_overlaps_found;
 }
 
+bool TopologicalMemoryPlanner::GetOperatorRequirementsReverse(ErrorReporter* error_reporter, int idx) {
+  if (ops_requirements_ == nullptr) {
+    TF_LITE_REPORT_ERROR(
+        error_reporter,
+        "OperatorRequirements not allocated yet");
+    return kTfLiteError;
+  }
+  return ops_requirements_[idx].reverse;
+}
+
 }  // namespace tflite

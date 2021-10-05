@@ -97,6 +97,9 @@ class TopologicalMemoryPlanner : public MemoryPlanner {
   // is an O(N^2) complexity operation, so only use for testing.
   bool DoAnyBuffersOverlap(ErrorReporter* error_reporter);
 
+  // Return the operator_requirements[idx].reverse in planner
+  bool GetOperatorRequirementsReverse(ErrorReporter* error_reporter, int idx);
+
   // Used to store a list of buffers ordered by their offset.
   struct ListEntry {
     int offset;
