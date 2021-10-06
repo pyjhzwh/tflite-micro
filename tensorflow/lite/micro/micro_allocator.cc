@@ -39,6 +39,11 @@ namespace tflite {
 
 namespace {
 
+const int kConvInputTensor = 0;
+const int kConvWeightsTensor = 1;
+const int kConvBiasTensor = 2;
+const int kConvOutputTensor = 0;
+
 // Maximum number of scratch buffer requests per operator. Operator kernels that
 // request more than this value will receive an exception.
 constexpr size_t kMaxScratchBuffersPerOp = 12;
@@ -283,8 +288,8 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
       case BuiltinOperator_CONV_2D: {
         ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
         current_op_info->op_type = op_type;
-        // input and filter
-        TFLITE_DCHECK_EQ(op->inputs()->size(), 2);
+        // input and filter (and bias)
+        TFLITE_DCHECK_GE(op->inputs()->size(), 2);
         // 1 output
         TFLITE_DCHECK_EQ(op->outputs()->size(), 1);
         // copy padding, stride info
@@ -321,7 +326,7 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
       case BuiltinOperator_CONV_2D: {
         ConvOpParams* current_op_params= reinterpret_cast<ConvOpParams*>(current_op_info->params);
         // input
-        if (current->needs_allocating) {
+        if (n == kConvInputTensor) {
             TfLiteEvalTensor* input_tensor = &(eval_tensors[tensor_index]);
             TFLITE_DCHECK_EQ(input_tensor->dims->size, 4);
             current_op_params->input_height = input_tensor->dims->data[1];
@@ -329,13 +334,14 @@ TfLiteStatus AllocationInfoBuilder::AddTensors(const SubGraph* subgraph,
             current_op_params->input_channel = input_tensor->dims->data[3];
         }
         // filter
-        else {
+        else if(n == kConvWeightsTensor) {
             TfLiteEvalTensor* filter_tensor = &(eval_tensors[tensor_index]);
             TFLITE_DCHECK_EQ(filter_tensor->dims->size, 4);
             current_op_params->filter_height = filter_tensor->dims->data[1];
             current_op_params->filter_width = filter_tensor->dims->data[2];
             current_op_params->output_channel = filter_tensor->dims->data[3];
         }
+        // else, bias, ignore
         break;
       }
       default:

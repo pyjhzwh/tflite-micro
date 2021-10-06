@@ -45,7 +45,7 @@ TF_LITE_MICRO_TEST(LoadModelAndPerformInference) {
   // This pulls in all the operation implementations we need
   tflite::AllOpsResolver resolver;
 
-  constexpr int kTensorArenaSize = 2000;
+  constexpr int kTensorArenaSize = 2000+1000;
   uint8_t tensor_arena[kTensorArenaSize];
 
   // Build an interpreter to run the model with
