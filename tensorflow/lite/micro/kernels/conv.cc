@@ -20,7 +20,9 @@ limitations under the License.
 #include "tensorflow/lite/kernels/internal/common.h"
 #include "tensorflow/lite/kernels/internal/quantization_util.h"
 #include "tensorflow/lite/kernels/internal/reference/conv.h"
+//#include "tensorflow/lite/kernels/internal/reference/conv_reverse.h"
 #include "tensorflow/lite/kernels/internal/reference/integer_ops/conv.h"
+//#include "tensorflow/lite/kernels/internal/reference/integer_ops/conv_reverse.h"
 #include "tensorflow/lite/kernels/internal/tensor_ctypes.h"
 #include "tensorflow/lite/kernels/kernel_util.h"
 #include "tensorflow/lite/kernels/padding.h"
@@ -59,50 +61,99 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
           (input->type == kTfLiteInt16 && filter->type == kTfLiteInt8),
       "Hybrid models are not supported on TFLite Micro.");
 
-  switch (input->type) {  // Already know in/out types are same.
-    case kTfLiteFloat32: {
-      tflite::reference_ops::Conv(
-          ConvParamsFloat(params, data), tflite::micro::GetTensorShape(input),
-          tflite::micro::GetTensorData<float>(input),
-          tflite::micro::GetTensorShape(filter),
-          tflite::micro::GetTensorData<float>(filter),
-          tflite::micro::GetTensorShape(bias),
-          tflite::micro::GetTensorData<float>(bias),
-          tflite::micro::GetTensorShape(output),
-          tflite::micro::GetTensorData<float>(output),
-          tflite::micro::GetTensorShape(nullptr), nullptr);
-      break;
+  if(!node->reverse) {
+    switch (input->type) {  // Already know in/out types are same.
+      case kTfLiteFloat32: {
+        tflite::reference_ops::Conv(
+            ConvParamsFloat(params, data), tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<float>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<float>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<float>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<float>(output),
+            tflite::micro::GetTensorShape(nullptr), nullptr);
+        break;
+      }
+      case kTfLiteInt16: {
+        reference_integer_ops::ConvPerChannel(
+            ConvParamsQuantized(params, data), data.per_channel_output_multiplier,
+            data.per_channel_output_shift, tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<int16_t>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<int8_t>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<std::int64_t>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<int16_t>(output));
+        break;
+      }
+      case kTfLiteInt8: {
+        reference_integer_ops::ConvPerChannel(
+            ConvParamsQuantized(params, data), data.per_channel_output_multiplier,
+            data.per_channel_output_shift, tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<int8_t>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<int8_t>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<int32_t>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<int8_t>(output));
+        break;
+      }
+      default:
+        TF_LITE_KERNEL_LOG(context, "Type %s (%d) not supported.",
+                          TfLiteTypeGetName(input->type), input->type);
+        return kTfLiteError;
     }
-    case kTfLiteInt16: {
-      reference_integer_ops::ConvPerChannel(
-          ConvParamsQuantized(params, data), data.per_channel_output_multiplier,
-          data.per_channel_output_shift, tflite::micro::GetTensorShape(input),
-          tflite::micro::GetTensorData<int16_t>(input),
-          tflite::micro::GetTensorShape(filter),
-          tflite::micro::GetTensorData<int8_t>(filter),
-          tflite::micro::GetTensorShape(bias),
-          tflite::micro::GetTensorData<std::int64_t>(bias),
-          tflite::micro::GetTensorShape(output),
-          tflite::micro::GetTensorData<int16_t>(output));
-      break;
+  }
+  else {
+    switch (input->type) {  // Already know in/out types are same.
+      case kTfLiteFloat32: {
+        tflite::reference_ops::ConvReverse(
+            ConvParamsFloat(params, data), tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<float>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<float>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<float>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<float>(output),
+            tflite::micro::GetTensorShape(nullptr), nullptr);
+        break;
+      }
+      case kTfLiteInt16: {
+        reference_integer_ops::ConvPerChannelReverse(
+            ConvParamsQuantized(params, data), data.per_channel_output_multiplier,
+            data.per_channel_output_shift, tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<int16_t>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<int8_t>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<std::int64_t>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<int16_t>(output));
+        break;
+      }
+      case kTfLiteInt8: {
+        reference_integer_ops::ConvPerChannelReverse(
+            ConvParamsQuantized(params, data), data.per_channel_output_multiplier,
+            data.per_channel_output_shift, tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<int8_t>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<int8_t>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<int32_t>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<int8_t>(output));
+        break;
+      }
+      default:
+        TF_LITE_KERNEL_LOG(context, "Type %s (%d) not supported.",
+                          TfLiteTypeGetName(input->type), input->type);
+        return kTfLiteError;
     }
-    case kTfLiteInt8: {
-      reference_integer_ops::ConvPerChannel(
-          ConvParamsQuantized(params, data), data.per_channel_output_multiplier,
-          data.per_channel_output_shift, tflite::micro::GetTensorShape(input),
-          tflite::micro::GetTensorData<int8_t>(input),
-          tflite::micro::GetTensorShape(filter),
-          tflite::micro::GetTensorData<int8_t>(filter),
-          tflite::micro::GetTensorShape(bias),
-          tflite::micro::GetTensorData<int32_t>(bias),
-          tflite::micro::GetTensorShape(output),
-          tflite::micro::GetTensorData<int8_t>(output));
-      break;
-    }
-    default:
-      TF_LITE_KERNEL_LOG(context, "Type %s (%d) not supported.",
-                         TfLiteTypeGetName(input->type), input->type);
-      return kTfLiteError;
   }
   return kTfLiteOk;
 }

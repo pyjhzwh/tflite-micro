@@ -568,6 +568,11 @@ TF_LITE_MICRO_TEST(BroadcastPerLayerQuantizationToPerChannelShouldMatchGolden) {
                      tensors, tensors_size, golden_quantized, output_dims_count,
                      &tflite::testing::common_conv_params,
                      tflite::Register_CONV_2D(), output_data));
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, tflite::testing::ValidateConvGoldens(
+                     tensors, tensors_size, golden_quantized, output_dims_count,
+                     &tflite::testing::common_conv_params,
+                     tflite::Register_CONV_2D(), output_data, 1e-5, true));
 }
 
 #endif  // !defined(XTENSA)
@@ -646,6 +651,12 @@ TF_LITE_MICRO_TEST(FilterDimsNotMatchingAffineQuantization) {
                         output_dims_count, &tflite::testing::common_conv_params,
                         tflite::Register_CONV_2D(), output_data));
 
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteError, tflite::testing::ValidateConvGoldens(
+                        tensors, tensors_size, golden_quantized,
+                        output_dims_count, &tflite::testing::common_conv_params,
+                        tflite::Register_CONV_2D(), output_data, 1e-5, true));
+
   // Set scale back to correct dimension, and make zero point array too short.
   quant->scale->size = tflite::testing::kFilterShape[0];
   quant->zero_point->size = 2;
@@ -654,6 +665,11 @@ TF_LITE_MICRO_TEST(FilterDimsNotMatchingAffineQuantization) {
                         tensors, tensors_size, golden_quantized,
                         output_dims_count, &tflite::testing::common_conv_params,
                         tflite::Register_CONV_2D(), output_data));
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteError, tflite::testing::ValidateConvGoldens(
+                        tensors, tensors_size, golden_quantized,
+                        output_dims_count, &tflite::testing::common_conv_params,
+                        tflite::Register_CONV_2D(), output_data, 1e-5, true));                
 }
 
 TF_LITE_MICRO_TEST(Int8Input32x1Filter32x32ShouldMatchGolden) {
@@ -790,6 +806,11 @@ TF_LITE_MICRO_TEST(Int8Input32x1Filter32x32ShouldMatchGolden) {
                      tensors, kTensorsSize, golden_quantized, output_dims_count,
                      &conv_params, tflite::Register_CONV_2D(), output_quantized,
                      kQuantizationTolerance));
+  TF_LITE_MICRO_EXPECT_EQ(
+      kTfLiteOk, tflite::testing::ValidateConvGoldens(
+                     tensors, kTensorsSize, golden_quantized, output_dims_count,
+                     &conv_params, tflite::Register_CONV_2D(), output_quantized,
+                     kQuantizationTolerance, true));
 }
 
 // This test is created based on

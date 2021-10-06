@@ -34,7 +34,7 @@ uint8_t KernelRunner::kKernelRunnerBuffer_[];
 KernelRunner::KernelRunner(const TfLiteRegistration& registration,
                            TfLiteTensor* tensors, int tensors_size,
                            TfLiteIntArray* inputs, TfLiteIntArray* outputs,
-                           void* builtin_data)
+                           void* builtin_data, bool reverse)
     : allocator_(SimpleMemoryAllocator::Create(GetMicroErrorReporter(),
                                                kKernelRunnerBuffer_,
                                                kKernelRunnerBufferSize_)),
@@ -57,6 +57,7 @@ KernelRunner::KernelRunner(const TfLiteRegistration& registration,
   node_.inputs = inputs;
   node_.outputs = outputs;
   node_.builtin_data = builtin_data;
+  node_.reverse = reverse;
 }
 
 TfLiteStatus KernelRunner::InitAndPrepare(const char* init_data,

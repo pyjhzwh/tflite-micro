@@ -21,14 +21,15 @@ namespace testing {
 template <typename T>
 TfLiteStatus InvokeConv(TfLiteTensor* tensors, int tensors_size,
                         int output_length, TfLiteConvParams* conv_params,
-                        TfLiteRegistration registration, T* output_data) {
+                        TfLiteRegistration registration, T* output_data,
+                        bool reverse) {
   int inputs_array_data[] = {3, 0, 1, 2};
   TfLiteIntArray* inputs_array = IntArrayFromInts(inputs_array_data);
   int outputs_array_data[] = {1, 3};
   TfLiteIntArray* outputs_array = IntArrayFromInts(outputs_array_data);
 
   micro::KernelRunner runner(registration, tensors, tensors_size, inputs_array,
-                             outputs_array, conv_params);
+                             outputs_array, conv_params, reverse);
 
   const char* init_data = reinterpret_cast<const char*>(conv_params);
   TfLiteStatus status = runner.InitAndPrepare(init_data);
@@ -44,9 +45,11 @@ TfLiteStatus ValidateConvGoldens(TfLiteTensor* tensors, int tensors_size,
                                  int output_length,
                                  TfLiteConvParams* conv_params,
                                  TfLiteRegistration registration,
-                                 T* output_data, float tolerance) {
+                                 T* output_data, float tolerance,
+                                 bool reverse) {
   TfLiteStatus status = InvokeConv(tensors, tensors_size, output_length,
-                                   conv_params, registration, output_data);
+                                   conv_params, registration, output_data,
+                                   reverse);
   if (status != kTfLiteOk) {
     return status;
   }
@@ -59,16 +62,18 @@ TfLiteStatus ValidateConvGoldens(TfLiteTensor* tensors, int tensors_size,
 
 TfLiteStatus InvokeConv(TfLiteTensor* tensors, int tensors_size,
                         int output_length, TfLiteConvParams* conv_params,
-                        TfLiteRegistration registration, float* output_data) {
+                        TfLiteRegistration registration, float* output_data,
+                        bool reverse) {
   return InvokeConv<float>(tensors, tensors_size, output_length, conv_params,
-                           registration, output_data);
+                           registration, output_data, reverse);
 }
 
 TfLiteStatus InvokeConv(TfLiteTensor* tensors, int tensors_size,
                         int output_length, TfLiteConvParams* conv_params,
-                        TfLiteRegistration registration, int8_t* output_data) {
+                        TfLiteRegistration registration, int8_t* output_data,
+                        bool reverse) {
   return InvokeConv<int8_t>(tensors, tensors_size, output_length, conv_params,
-                            registration, output_data);
+                            registration, output_data, reverse);
 }
 
 TfLiteStatus ValidateConvGoldens(TfLiteTensor* tensors, int tensors_size,
@@ -76,10 +81,11 @@ TfLiteStatus ValidateConvGoldens(TfLiteTensor* tensors, int tensors_size,
                                  int output_length,
                                  TfLiteConvParams* conv_params,
                                  TfLiteRegistration registration,
-                                 float* output_data, float tolerance) {
+                                 float* output_data, float tolerance,
+                                 bool reverse) {
   return ValidateConvGoldens<float>(tensors, tensors_size, expected_output_data,
                                     output_length, conv_params, registration,
-                                    output_data, tolerance);
+                                    output_data, tolerance, reverse);
 }
 
 TfLiteStatus ValidateConvGoldens(TfLiteTensor* tensors, int tensors_size,
@@ -87,10 +93,11 @@ TfLiteStatus ValidateConvGoldens(TfLiteTensor* tensors, int tensors_size,
                                  int output_length,
                                  TfLiteConvParams* conv_params,
                                  TfLiteRegistration registration,
-                                 int8_t* output_data, float tolerance) {
+                                 int8_t* output_data, float tolerance,
+                                 bool reverse) {
   return ValidateConvGoldens<int8_t>(
       tensors, tensors_size, expected_output_data, output_length, conv_params,
-      registration, output_data, tolerance);
+      registration, output_data, tolerance, reverse);
 }
 
 TfLiteStatus TestConvFloat(int* input_dims_data, const float* input_data,
@@ -100,7 +107,8 @@ TfLiteStatus TestConvFloat(int* input_dims_data, const float* input_data,
                            const float* expected_output_data,
                            TfLiteConvParams* conv_params,
                            TfLiteRegistration registration,
-                           float* output_data) {
+                           float* output_data,
+                           bool reverse) {
   TfLiteIntArray* input_dims = IntArrayFromInts(input_dims_data);
   TfLiteIntArray* filter_dims = IntArrayFromInts(filter_dims_data);
   TfLiteIntArray* bias_dims = IntArrayFromInts(bias_dims_data);
@@ -118,7 +126,7 @@ TfLiteStatus TestConvFloat(int* input_dims_data, const float* input_data,
 
   return ValidateConvGoldens(tensors, tensors_size, expected_output_data,
                              output_dims_count, conv_params, registration,
-                             output_data);
+                             output_data, 1e-5, reverse);
 }
 
 template <typename T, typename BiasT>
@@ -180,7 +188,7 @@ TfLiteStatus TestConvQuantizedPerChannel(
                    output_dims_count, output_scale, output_zero_point);
   return ValidateConvGoldens(
       tensors, tensors_size, expected_output_data_quantized, output_dims_count,
-      conv_params, registration, output_data, 1.0 /* tolerance */);
+      conv_params, registration, output_data, 1.0 /* tolerance */, false /*reverse*/);
 }
 
 TfLiteStatus TestConvQuantizedPerChannel(

@@ -34,7 +34,7 @@ class KernelRunner {
  public:
   KernelRunner(const TfLiteRegistration& registration, TfLiteTensor* tensors,
                int tensors_size, TfLiteIntArray* inputs,
-               TfLiteIntArray* outputs, void* builtin_data);
+               TfLiteIntArray* outputs, void* builtin_data, bool reverse=false);
 
   // Calls init and prepare on the kernel (i.e. TfLiteRegistration) struct. Any
   // exceptions will be DebugLog'd and returned as a status code.
