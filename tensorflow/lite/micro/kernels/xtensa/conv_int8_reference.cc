@@ -51,19 +51,39 @@ TfLiteStatus ConvReferenceEvalInt8(TfLiteContext* context, TfLiteNode* node) {
       (NumInputs(node) == 3)
           ? tflite::micro::GetEvalInput(context, node, kConvBiasTensor)
           : nullptr;
+  // TODO: mark node or context to know whether the normal conv or reversed conv
+  switch(node->reversed) {
+      case FORWARD: {
+        reference_integer_ops::ConvPerChannel(
+            ConvParamsQuantized(params, op_data),
+            op_data.per_channel_output_multiplier, op_data.per_channel_output_shift,
+            tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<int8_t>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<int8_t>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<int32_t>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<int8_t>(output));
+            break;
+      }
+      case REVERSED: {
+          reference_integer_ops::ConvReversePerChannel(
+            ConvParamsQuantized(params, op_data),
+            op_data.per_channel_output_multiplier, op_data.per_channel_output_shift,
+            tflite::micro::GetTensorShape(input),
+            tflite::micro::GetTensorData<int8_t>(input),
+            tflite::micro::GetTensorShape(filter),
+            tflite::micro::GetTensorData<int8_t>(filter),
+            tflite::micro::GetTensorShape(bias),
+            tflite::micro::GetTensorData<int32_t>(bias),
+            tflite::micro::GetTensorShape(output),
+            tflite::micro::GetTensorData<int8_t>(output));
+            break;
+      }
 
-  reference_integer_ops::ConvPerChannel(
-      ConvParamsQuantized(params, op_data),
-      op_data.per_channel_output_multiplier, op_data.per_channel_output_shift,
-      tflite::micro::GetTensorShape(input),
-      tflite::micro::GetTensorData<int8_t>(input),
-      tflite::micro::GetTensorShape(filter),
-      tflite::micro::GetTensorData<int8_t>(filter),
-      tflite::micro::GetTensorShape(bias),
-      tflite::micro::GetTensorData<int32_t>(bias),
-      tflite::micro::GetTensorShape(output),
-      tflite::micro::GetTensorData<int8_t>(output));
   return kTfLiteOk;
+  }
 }
 
 // TODO(b/189981943): This variant can be used for a smaller binary

@@ -133,6 +133,18 @@ inline void InitializeTest() { InitializeTarget(); }
     }                                                                    \
   } while (false)
 
+#define TF_LITE_MICRO_EXPECT_EQ_NEAR(x, y, epsilon)                              \
+  do {                                                                        \
+    auto vx = (x);                                                            \
+    auto vy = (y);                                                            \
+    auto delta = ((vx) > (vy)) ? ((vx) - (vy)) : ((vy) - (vx));               \
+    if (vx != vy && delta > epsilon) {                                        \
+      MicroPrintf(#x " (%d) near " #y " (%d) failed at %s:%d",                \
+                  static_cast<int>(vx), static_cast<int>(vy), __FILE__, \
+                  __LINE__);                                                  \
+      micro_test::did_test_fail = true;                                       \
+    }                                                                         \
+  } while (false)
 #define TF_LITE_MICRO_EXPECT_NE(x, y)                                   \
   do {                                                                  \
     if ((x) == (y)) {                                                   \

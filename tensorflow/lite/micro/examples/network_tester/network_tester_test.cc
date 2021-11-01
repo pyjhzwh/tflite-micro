@@ -13,10 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/lite/micro/all_ops_resolver.h"
-#include "tensorflow/lite/micro/examples/network_tester/expected_output_data.h"
-#include "tensorflow/lite/micro/examples/network_tester/input_data.h"
-#include "tensorflow/lite/micro/examples/network_tester/network_model.h"
+//#include "tensorflow/lite/micro/all_ops_resolver.h"
+//#include "tensorflow/lite/micro/examples/network_tester/expected_output_data.h"
+//#include "tensorflow/lite/micro/examples/network_tester/input_data.h"
+//#include "tensorflow/lite/micro/examples/network_tester/network_model.h"
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
+#include "tensorflow/lite/micro/examples/network_tester/train/models/expected_output_data.h"
+#include "tensorflow/lite/micro/examples/network_tester/train/models/input_data.h"
+#include "tensorflow/lite/micro/examples/network_tester/train/models/network_model.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_utils.h"
@@ -68,13 +72,40 @@ inline void print_output_data(TfLiteTensor* output) {
   printf("0x%02x\"\n", output->data.uint8[num_bytes_to_print - 1]);
   printf("}");
 }
+/*
+inline void print_input_data(TfLiteTensor* input) {
+  int num_bytes_to_print =
+      ((input->bytes < NUM_BYTES_TO_PRINT) || NUM_BYTES_TO_PRINT == 0)
+          ? input->bytes
+          : NUM_BYTES_TO_PRINT;
+
+  int dims_size = input->dims->size;
+  printf("{\n");
+  printf("\"dims\": [%d,", dims_size);
+  for (int i = 0; i < input->dims->size - 1; ++i) {
+    printf("%d,", input->dims->data[i]);
+  }
+  printf("%d],\n", input->dims->data[dims_size - 1]);
+
+  printf("\"data_address\": \"%p\",\n", input->data.raw);
+  printf("\"data\":\"");
+  for (int i = 0; i < num_bytes_to_print - 1; ++i) {
+    if (i % 16 == 0 && i != 0) {
+      printf("\n");
+    }
+    printf("0x%02x,", input->data.uint8[i]);
+  }
+  printf("0x%02x\"\n", input->data.uint8[num_bytes_to_print - 1]);
+  printf("}");
+}
+*/
 #endif
 
 template <typename T>
 void check_output_elem(TfLiteTensor* output, const T* expected_output,
                        const int index) {
-  TF_LITE_MICRO_EXPECT_EQ(tflite::GetTensorData<T>(output)[index],
-                          expected_output[index]);
+  TF_LITE_MICRO_EXPECT_EQ_NEAR(tflite::GetTensorData<T>(output)[index],
+                          expected_output[index], 2);
 }
 
 TF_LITE_MICRO_TESTS_BEGIN
@@ -95,10 +126,18 @@ TF_LITE_MICRO_TEST(TestInvoke) {
     return kTfLiteError;
   }
 
-  tflite::AllOpsResolver resolver;
+  //tflite::AllOpsResolver resolver;
+  //use mutable micro resolver rather than allOpsResolver
+  static tflite::MicroMutableOpResolver<6> micro_op_resolver;  // NOLINT
+  micro_op_resolver.AddConv2D();
+  micro_op_resolver.AddDepthwiseConv2D();
+  micro_op_resolver.AddFullyConnected();
+  micro_op_resolver.AddMaxPool2D();
+  micro_op_resolver.AddSoftmax();
+  micro_op_resolver.AddMean();
 
   tflite::MicroInterpreter interpreter(
-      model, resolver, tensor_arena, TENSOR_ARENA_SIZE, &micro_error_reporter);
+      model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, &micro_error_reporter);
 
   TfLiteStatus allocate_status = interpreter.AllocateTensors();
   if (allocate_status != kTfLiteOk) {
@@ -123,12 +162,26 @@ TF_LITE_MICRO_TEST(TestInvoke) {
     TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk, invoke_status);
 
 #ifdef NUM_BYTES_TO_PRINT
+    /*
+    printf("num_of_inputs: %d\n", (int)interpreter.inputs_size());
+    printf("input_begin\n");
+    printf("[\n");
+    for (size_t i = 0; i < interpreter.inputs_size(); i++) {
+      TfLiteTensor* input = interpreter.input(i);
+      print_input_data(input);
+      if (i != interpreter.inputs_size() - 1) {
+        printf(",\n");
+      }
+    }
+    printf("]\n");
+    printf("input_end\n");
+    */
     // Print all of the output data, or the first NUM_BYTES_TO_PRINT bytes,
     // whichever comes first as well as the output shape.
-    printf("num_of_outputs: %d\n", interpreter.outputs_size());
+    printf("num_of_outputs: %d\n", (int)interpreter.outputs_size());
     printf("output_begin\n");
     printf("[\n");
-    for (int i = 0; i < interpreter.outputs_size(); i++) {
+    for (size_t i = 0; i < interpreter.outputs_size(); i++) {
       TfLiteTensor* output = interpreter.output(i);
       print_output_data(output);
       if (i != interpreter.outputs_size() - 1) {
